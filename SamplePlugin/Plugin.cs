@@ -6,6 +6,7 @@ using System.IO;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using SamplePlugin.Windows;
+using SamplePlugin.Services;
 
 namespace SamplePlugin;
 
@@ -28,16 +29,15 @@ public sealed class Plugin : IDalamudPlugin
     public readonly WindowSystem WindowSystem = new(Plugin.Name);
     private ConfigWindow ConfigWindow { get; init; }
     private MainWindow MainWindow { get; init; }
+    private RecipeCacheService RecipeCacheService { get; init; }
 
     public Plugin()
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
-        // You might normally want to embed resources and load them from the manifest stream
-        var goatImagePath = Path.Combine(PluginInterface.AssemblyLocation.Directory?.FullName!, "goat.png");
-
+        RecipeCacheService = new RecipeCacheService(this);
         ConfigWindow = new ConfigWindow(this);
-        MainWindow = new MainWindow(this, goatImagePath);
+        MainWindow = new MainWindow(this, RecipeCacheService);
 
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(MainWindow);
@@ -69,11 +69,12 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
-        
+
         WindowSystem.RemoveAllWindows();
 
         ConfigWindow.Dispose();
         MainWindow.Dispose();
+        RecipeCacheService.Dispose();
 
         CommandManager.RemoveHandler(CommandName);
     }
