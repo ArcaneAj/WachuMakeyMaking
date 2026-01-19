@@ -80,19 +80,19 @@ public class CollectableService
     /// Tries to read real values from the SpecialShop Excel sheet, and falls back to
     /// name-based heuristics if no shop entry is found.
     /// </summary>
-    public (bool isCollectable, string currencyName, int scripValue) GetCollectableInfo(Item item)
+    public (bool isCollectable, Item currency, int scripValue) GetCollectableInfo(Item item)
     {
         if (this.collectablesCache.TryGetValue(item, out var crafterScrips))
         {
-            return (true, crafterScrips.Item.Name.ToString(), crafterScrips.Quantity);
+            return (true, crafterScrips.Item, crafterScrips.Quantity);
         }
 
         if (this.restorationCache.TryGetValue(item, out var skybuildersScrips))
         {
-            return (true, skybuildersScrips.Item.Name.ToString(), skybuildersScrips.Quantity);
+            return (true, skybuildersScrips.Item, skybuildersScrips.Quantity);
         }
 
-        return (false, "NONE", 0);
+        return (false, new Item(), 0);
 
     }
 }

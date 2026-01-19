@@ -32,15 +32,6 @@ public class MainWindow : Window, IDisposable
 
         this.plugin = plugin;
         this.recipeCacheService = recipeCacheService;
-
-        //var lumina = new Lumina.GameData("G:\\SteamLibrary\\steamapps\\common\\FINAL FANTASY XIV Online\\game\\sqpack");
-        //var sheetNames = lumina.Excel.SheetNames;
-
-        //foreach (var name in sheetNames.Where(x => !x.StartsWith("quest/") && !x.StartsWith("custom/")))
-        //{
-        //    Plugin.Log.Info(name);
-        //}
-
     }
 
     public void Dispose()

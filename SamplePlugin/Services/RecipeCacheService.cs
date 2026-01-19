@@ -60,7 +60,7 @@ public class RecipeCacheService : IDisposable
         if (cachedRecipes.Count == 0 && !isCacheInitializing)
         {
             isCacheInitializing = true;
-            await Task.Run(InitializeRecipeCacheAsync);
+            await InitializeRecipeCacheAsync();
         }
     }
 
@@ -84,6 +84,9 @@ public class RecipeCacheService : IDisposable
             // Get consolidated item stacks and crystals
             var consolidatedItems = await Task.Run(GetConsolidatedItems);
             var crystals = await Task.Run(GetCrystals);
+
+            var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
+            var gil = itemSheet.GetRow(1);
 
             // Create inventory count lookup (items + crystals)
             var inventoryCounts = consolidatedItems.ToDictionary(
@@ -150,7 +153,8 @@ public class RecipeCacheService : IDisposable
                         var recipeWithValue = new ModRecipeWithValue(
                             recipe.Item,
                             recipe.Ingredients,
-                            marketValue
+                            marketValue,
+                            gil
                         );
 
                         recipesWithValues.Add(recipeWithValue);
@@ -171,8 +175,6 @@ public class RecipeCacheService : IDisposable
                 itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList(); // All items failed due to error
             }
 
-            Plugin.Log.Info(string.Join(Environment.NewLine, itemsWithoutValue.Select(GetItemName)));
-
             foreach (var itemId in itemsWithoutValue)
             {
                 if (recipeLookup.TryGetValue(itemId, out var item))
@@ -180,7 +182,6 @@ public class RecipeCacheService : IDisposable
                     // Check if this item is collectable
                     var (isCollectable, scripType, scripValue) = collectableService.GetCollectableInfo(item.Item);
                     recipesWithValues.Add(new ModRecipeWithValue(item.Item, item.Ingredients, scripValue, scripType));
-                    itemsWithoutValue.Remove(itemId);
                 }
             }
 
