@@ -124,6 +124,9 @@ public class RecipeCacheService : IDisposable
                 .DistinctBy(r => r.Item.Name.ToString()) // Remove duplicates by result item name
                 .ToList();
 
+            // Update progress to indicate we're moving to the API phase
+            CurrentProcessingStep = "Fetching market prices...";
+
             // Get player's home world ID
             var homeWorldId = Plugin.PlayerState.HomeWorld.RowId;
 
