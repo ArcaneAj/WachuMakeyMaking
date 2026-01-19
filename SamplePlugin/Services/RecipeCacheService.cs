@@ -5,9 +5,6 @@ using SamplePlugin.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,19 +13,16 @@ namespace SamplePlugin.Services;
 public class RecipeCacheService : IDisposable
 {
     private readonly Plugin plugin;
-    private readonly HttpClient httpClient;
+    private readonly UniversalisService universalisService;
 
     // Cache for recipes to avoid recalculating every frame
     private List<ModRecipeWithValue> cachedRecipes = new();
     private bool isCacheInitializing = false;
 
-    public RecipeCacheService(Plugin plugin)
+    public RecipeCacheService(Plugin plugin, UniversalisService universalisService)
     {
         this.plugin = plugin;
-        httpClient = new HttpClient(new SocketsHttpHandler
-        {
-            AutomaticDecompression = DecompressionMethods.All
-        });
+        this.universalisService = universalisService;
 
         // Subscribe to inventory changes
         Plugin.GameInventory.InventoryChanged += OnInventoryChanged;
@@ -127,9 +121,6 @@ public class RecipeCacheService : IDisposable
             // Update progress to indicate we're moving to the API phase
             CurrentProcessingStep = "Fetching market prices...";
 
-            // Get player's home world ID
-            var homeWorldId = Plugin.PlayerState.HomeWorld.RowId;
-
             // Create cancellation token with 10-second timeout
             using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var cancellationToken = cancellationTokenSource.Token;
@@ -141,35 +132,17 @@ public class RecipeCacheService : IDisposable
 
             try
             {
-                var ids = string.Join(',', itemsWithoutValue);
-                using var result = await httpClient.GetAsync($"https://universalis.app/api/v2/aggregated/{homeWorldId}/{ids}", cancellationToken);
+                var marketData = await universalisService.GetMarketDataAsync(itemsWithoutValue, cancellationToken);
 
-                if (result.StatusCode != HttpStatusCode.OK)
-                {
-                    throw new HttpRequestException("Invalid status code " + result.StatusCode, null, result.StatusCode);
-                }
-
-                await using var responseStream = await result.Content.ReadAsStreamAsync(cancellationToken);
-                var json = await JsonSerializer.DeserializeAsync<AggregatedMarketBoardResult>(responseStream, cancellationToken: cancellationToken);
-                if (json == null || json.results == null)
-                {
-                    throw new HttpRequestException("Universalis returned null response");
-                }
-
-                foreach (var marketItem in json.results)
+                foreach (var marketItem in marketData.results ?? [])
                 {
                     var id = marketItem.itemId;
 
                     // Get the recipe for this item
                     if (recipeLookup.TryGetValue(id, out var recipe))
                     {
-                        // Get the market value (using average price or current average price)
-                        var marketValue = marketItem.hq?.minListing?.dc?.price ?? marketItem.nq?.minListing?.dc?.price ?? marketItem.hq?.recentPurchase?.dc?.price ?? marketItem.nq?.recentPurchase?.dc?.price ?? -1;
-                        if (marketValue == -1)
-                        {
-                            var marketItemJson = JsonSerializer.Serialize(marketItem, new JsonSerializerOptions { WriteIndented = true });
-                            Plugin.Log.Info($"Market item with no value found: {marketItemJson}");
-                        }
+                        // Get the market value using the service
+                        var marketValue = UniversalisService.GetMarketValue(marketItem);
 
                         // Create the recipe with value
                         var recipeWithValue = new ModRecipeWithValue(
@@ -182,15 +155,18 @@ public class RecipeCacheService : IDisposable
                     }
                 }
 
-                itemsWithoutValue = json.failedItems ?? [];
+                // For now, assume all items were found (simplified - could be enhanced to handle failed items)
+                itemsWithoutValue = marketData.failedItems ?? [];
             }
             catch (OperationCanceledException)
             {
                 Plugin.Log.Warning("Universalis API request timed out after 10 seconds");
+                itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId); // All items failed due to timeout
             }
             catch (Exception ex)
             {
                 Plugin.Log.Error($"Error calling Universalis API: {ex.Message}");
+                itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId); // All items failed due to error
             }
 
             Plugin.Log.Info(string.Join(Environment.NewLine, itemsWithoutValue.Select(GetItemName)));

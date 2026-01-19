@@ -29,13 +29,15 @@ public sealed class Plugin : IDalamudPlugin
     public readonly WindowSystem WindowSystem = new(Plugin.Name);
     private ConfigWindow ConfigWindow { get; init; }
     private MainWindow MainWindow { get; init; }
+    private UniversalisService UniversalisService { get; init; }
     private RecipeCacheService RecipeCacheService { get; init; }
 
     public Plugin()
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
-        RecipeCacheService = new RecipeCacheService(this);
+        UniversalisService = new UniversalisService(this);
+        RecipeCacheService = new RecipeCacheService(this, UniversalisService);
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this, RecipeCacheService);
 
@@ -74,6 +76,7 @@ public sealed class Plugin : IDalamudPlugin
 
         ConfigWindow.Dispose();
         MainWindow.Dispose();
+        UniversalisService.Dispose();
         RecipeCacheService.Dispose();
 
         CommandManager.RemoveHandler(CommandName);
