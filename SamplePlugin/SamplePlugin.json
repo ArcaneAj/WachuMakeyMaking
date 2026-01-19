@@ -1,8 +1,8 @@
 {
-  "Author": "your name here",
-  "Name": "Sample Plugin",
-  "Punchline": "A short one-liner that shows up in /xlplugins.",
-  "Description": "A description that shows up in /xlplugins. List any major slash-command(s).",
+  "Author": "Nesrie",
+  "Name": "WachuMakeyMaking",
+  "Punchline": "A mod that calculates what you can do with what you have.",
+  "Description": "/wymm takes what you have in your inventory, and any additionally configured items, and calculates the optimal combination of items to make. Item prices are fetched from Universalis, or can be manually overridden.",
   "ApplicableVersion": "any",
   "Tags": [
     "sample",
