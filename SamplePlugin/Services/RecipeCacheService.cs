@@ -33,12 +33,21 @@ public class RecipeCacheService : IDisposable
 
     public bool IsCacheInitializing => isCacheInitializing;
 
+    public string CurrentProcessingStep { get; private set; } = string.Empty;
+
+    public int CurrentProgress { get; private set; }
+
+    public int TotalProgress { get; private set; }
+
     public List<ModRecipe> CachedRecipes => cachedRecipes;
 
     public void ForceRefresh()
     {
         cachedRecipes.Clear();
         isCacheInitializing = false;
+        CurrentProcessingStep = string.Empty;
+        CurrentProgress = 0;
+        TotalProgress = 0;
     }
 
     public async Task EnsureCacheInitializedAsync()
@@ -55,12 +64,18 @@ public class RecipeCacheService : IDisposable
         // Clear cache when inventory changes - it will be rebuilt on next access
         cachedRecipes.Clear();
         isCacheInitializing = false; // Reset flag so new cache can be built
+        CurrentProcessingStep = string.Empty;
+        CurrentProgress = 0;
+        TotalProgress = 0;
     }
 
     private async Task InitializeRecipeCacheAsync()
     {
         try
         {
+            CurrentProcessingStep = "Getting inventory items...";
+            CurrentProgress = 0;
+
             // Get consolidated item stacks and crystals
             var consolidatedItems = await Task.Run(GetConsolidatedItems);
             var crystals = await Task.Run(GetCrystals);
@@ -76,15 +91,25 @@ public class RecipeCacheService : IDisposable
                 inventoryCounts[crystal.Id] = crystal.Quantity;
             }
 
+            // Set total progress to the number of consolidated items to process
+            TotalProgress = consolidatedItems.Count;
+            CurrentProcessingStep = $"Finding recipes... (0/{consolidatedItems.Count} items)";
+
             // Find all recipes that use at least one ingredient from inventory
             var allRecipesWithInventoryIngredients = new List<ModRecipe>();
-            foreach (var item in consolidatedItems)
+
+            for (int i = 0; i < consolidatedItems.Count; i++)
             {
+                var item = consolidatedItems[i];
                 var recipes = await Task.Run(() => FindRecipesWithIngredient(item.Item));
                 allRecipesWithInventoryIngredients.AddRange(recipes);
+
+                CurrentProgress = i + 1;
+                CurrentProcessingStep = $"Finding recipes... ({CurrentProgress}/{consolidatedItems.Count} items)";
             }
 
             // Filter to only recipes that are entirely satisfiable, and remove duplicates by result item name
+            CurrentProcessingStep = "Filtering craftable recipes...";
             var craftableRecipes = allRecipesWithInventoryIngredients
                 .Where(recipe => CanCraftRecipe(recipe, inventoryCounts))
                 .DistinctBy(r => r.Item.Name.ToString()) // Remove duplicates by result item name

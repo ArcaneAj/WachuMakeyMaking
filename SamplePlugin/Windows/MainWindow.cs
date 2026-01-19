@@ -64,6 +64,18 @@ public class MainWindow : Window, IDisposable
                 if (recipeCacheService.IsCacheInitializing)
                 {
                     ImGui.Text("Loading recipes...");
+
+                    if (!string.IsNullOrEmpty(recipeCacheService.CurrentProcessingStep))
+                    {
+                        ImGui.Text(recipeCacheService.CurrentProcessingStep);
+                    }
+
+                    if (recipeCacheService.TotalProgress > 0)
+                    {
+                        var progress = (float)recipeCacheService.CurrentProgress / recipeCacheService.TotalProgress;
+                        ImGui.ProgressBar(progress, new Vector2(-1, 20));
+                    }
+
                     return;
                 }
 
