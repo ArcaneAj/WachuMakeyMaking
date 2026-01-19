@@ -68,26 +68,18 @@ public class MainWindow : Window, IDisposable
                 }
 
                 // Create a local snapshot of the cache to avoid race conditions
-                var cachedItemStacks = recipeCacheService.CachedItemStacks?.ToList() ?? new List<SamplePlugin.Models.ModItemStack>();
-                var cachedRecipes = recipeCacheService.CachedRecipes?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToList()) ?? new Dictionary<uint, List<SamplePlugin.Models.ModRecipe>>();
+                var cachedRecipes = recipeCacheService.CachedRecipes?.ToList() ?? new List<SamplePlugin.Models.ModRecipe>();
 
-                ImGui.Text($"{cachedItemStacks.Count} items with recipes found");
+                ImGui.Text($"{cachedRecipes.Count} craftable recipes found");
 
-
-                foreach (var itemStack in cachedItemStacks)
+                if (cachedRecipes.Count > 0)
                 {
-                    // Get cached recipes for this item
-                    if (!cachedRecipes.TryGetValue(itemStack.Id, out var recipes) || recipes.Count == 0)
-                        continue;
-
-                    ImGuiHelpers.ScaledDummy(20.0f);
-                    ImGui.Text($"Recipes using {itemStack.Item.Name} ({itemStack.Id}):");
-
-                    ImGui.Text($"Found {recipes.Count} recipes");
+                    ImGuiHelpers.ScaledDummy(10.0f);
+                    ImGui.Text("Craftable Recipes:");
 
                     using (ImRaii.PushIndent(20f))
                     {
-                        foreach (var recipe in recipes)
+                        foreach (var recipe in cachedRecipes.OrderBy(r => r.Item.Name.ToString()))
                         {
                             ImGui.Text($"{recipe.Item.Name}");
                         }

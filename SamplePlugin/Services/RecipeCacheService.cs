@@ -14,9 +14,8 @@ public class RecipeCacheService : IDisposable
     private readonly Plugin plugin;
 
     // Cache for recipes to avoid recalculating every frame
-    private List<ModItemStack>? _cachedItemStacks = null!;
-    private Dictionary<uint, List<ModRecipe>> _cachedRecipes = new();
-    private bool _isCacheInitializing = false;
+    private List<ModRecipe> cachedRecipes = new();
+    private bool isCacheInitializing = false;
 
     public RecipeCacheService(Plugin plugin)
     {
@@ -32,24 +31,21 @@ public class RecipeCacheService : IDisposable
         Plugin.GameInventory.InventoryChanged -= OnInventoryChanged;
     }
 
-    public bool IsCacheInitializing => _isCacheInitializing;
+    public bool IsCacheInitializing => isCacheInitializing;
 
-    public List<ModItemStack> CachedItemStacks => _cachedItemStacks;
-
-    public Dictionary<uint, List<ModRecipe>> CachedRecipes => _cachedRecipes;
+    public List<ModRecipe> CachedRecipes => cachedRecipes;
 
     public void ForceRefresh()
     {
-        _cachedItemStacks = null;
-        _cachedRecipes.Clear();
-        _isCacheInitializing = false;
+        cachedRecipes.Clear();
+        isCacheInitializing = false;
     }
 
     public async Task EnsureCacheInitializedAsync()
     {
-        if (_cachedItemStacks == null && !_isCacheInitializing)
+        if (cachedRecipes.Count == 0 && !isCacheInitializing)
         {
-            _isCacheInitializing = true;
+            isCacheInitializing = true;
             await Task.Run(InitializeRecipeCacheAsync);
         }
     }
@@ -57,49 +53,82 @@ public class RecipeCacheService : IDisposable
     private void OnInventoryChanged(IReadOnlyCollection<InventoryEventArgs> events)
     {
         // Clear cache when inventory changes - it will be rebuilt on next access
-        _cachedItemStacks = null;
-        _isCacheInitializing = false; // Reset flag so new cache can be built
+        cachedRecipes.Clear();
+        isCacheInitializing = false; // Reset flag so new cache can be built
     }
 
     private async Task InitializeRecipeCacheAsync()
     {
         try
         {
-            // Get a local copy of item stacks to avoid race conditions
-            var itemStacks = await Task.Run(() => GetBagItemStacks());
+            // Get consolidated item stacks and crystals
+            var consolidatedItems = await Task.Run(GetConsolidatedItems);
+            var crystals = await Task.Run(GetCrystals);
 
-            // Create a local recipes dictionary
-            var recipes = new Dictionary<uint, List<ModRecipe>>();
+            // Create inventory count lookup (items + crystals)
+            var inventoryCounts = consolidatedItems.ToDictionary(
+                stack => stack.Id,
+                stack => stack.Quantity
+            );
 
-            // Calculate recipes for all items in inventory
-            foreach (var itemStack in itemStacks)
+            foreach (var crystal in crystals)
             {
-                recipes[itemStack.Id] = await Task.Run(() => FindRecipesWithIngredient(itemStack.Item));
+                inventoryCounts[crystal.Id] = crystal.Quantity;
             }
 
+            // Find all recipes that use at least one ingredient from inventory
+            var allRecipesWithInventoryIngredients = new List<ModRecipe>();
+            foreach (var item in consolidatedItems)
+            {
+                var recipes = await Task.Run(() => FindRecipesWithIngredient(item.Item));
+                allRecipesWithInventoryIngredients.AddRange(recipes);
+            }
+
+            // Filter to only recipes that are entirely satisfiable, and remove duplicates by result item name
+            var craftableRecipes = allRecipesWithInventoryIngredients
+                .Where(recipe => CanCraftRecipe(recipe, inventoryCounts))
+                .DistinctBy(r => r.Item.Name.ToString()) // Remove duplicates by result item name
+                .ToList();
+
             // Atomically update the cache
-            _cachedItemStacks = itemStacks;
-            _cachedRecipes = recipes;
+            cachedRecipes = craftableRecipes;
         }
         finally
         {
-            _isCacheInitializing = false;
+            isCacheInitializing = false;
         }
     }
 
-    private List<ModItemStack> GetBagItemStacks()
+
+    private List<ModItemStack> GetCrystals()
+    {
+        return GetItemsFromInventory(GameInventoryType.Crystals).ToList();
+    }
+
+    private List<ModItemStack> GetConsolidatedItems()
     {
         var allItems = new List<ModItemStack>();
 
         var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
 
-        // Collect items from all inventory bags
+        // Collect items from all inventory bags (excluding crystals)
         allItems.AddRange(GetItemsFromInventory(GameInventoryType.Inventory1));
         allItems.AddRange(GetItemsFromInventory(GameInventoryType.Inventory2));
         allItems.AddRange(GetItemsFromInventory(GameInventoryType.Inventory3));
         allItems.AddRange(GetItemsFromInventory(GameInventoryType.Inventory4));
 
-        return allItems;
+        // Consolidate items with the same ID
+        var consolidatedItems = allItems
+            .GroupBy(stack => stack.Id)
+            .Select(group =>
+            {
+                var firstStack = group.First();
+                var totalQuantity = group.Sum(stack => stack.Quantity);
+                return new ModItemStack(firstStack.Item, firstStack.Id, totalQuantity);
+            })
+            .ToList();
+
+        return consolidatedItems;
     }
 
     private IEnumerable<ModItemStack> GetItemsFromInventory(GameInventoryType inventory)
@@ -155,15 +184,27 @@ public class RecipeCacheService : IDisposable
         return new ModRecipe(recipe.ItemResult.Value, ingredientsDict);
     }
 
-    private List<ModRecipe> FindRecipesWithIngredient(uint ingredientId)
+    private bool CanCraftRecipe(ModRecipe recipe, Dictionary<uint, int> inventoryCounts)
     {
-        var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
-        if (!itemSheet.TryGetRow(ingredientId, out var item))
+        // Check if we have enough of each ingredient
+        foreach (var ingredient in recipe.Ingredients)
         {
-            return [];
+            var ingredientId = ingredient.Key.RowId;
+
+            // Check if we have this item in inventory
+            if (!inventoryCounts.TryGetValue(ingredientId, out var availableQuantity))
+            {
+                return false; // Don't have this ingredient at all
+            }
+
+            // Check if we have enough quantity
+            if (availableQuantity < ingredient.Value)
+            {
+                return false; // Don't have enough of this ingredient
+            }
         }
 
-        return FindRecipesWithIngredient(item);
+        return true; // Have enough of all ingredients
     }
 
     private List<ModRecipe> FindRecipesWithIngredient(Item item)
