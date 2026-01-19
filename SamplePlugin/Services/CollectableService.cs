@@ -70,13 +70,6 @@ public class CollectableService
         }
     }
 
-    public enum ScripType
-    {
-        None,
-        CraftersScrip,
-        SkybuildersScrip
-    }
-
     /// <summary>
     /// Get collectable information (scrip type and value) for a given result item.
     /// Tries to read real values from the SpecialShop Excel sheet, and falls back to

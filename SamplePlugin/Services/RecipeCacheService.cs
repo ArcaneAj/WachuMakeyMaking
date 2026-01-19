@@ -204,13 +204,12 @@ public class RecipeCacheService : IDisposable
         return $"Unknown Item ({itemId})";
     }
 
-
-    private List<ModItemStack> GetCrystals()
+    public List<ModItemStack> GetCrystals()
     {
         return GetItemsFromInventory(GameInventoryType.Crystals).ToList();
     }
 
-    private List<ModItemStack> GetConsolidatedItems()
+    public List<ModItemStack> GetConsolidatedItems()
     {
         var allItems = new List<ModItemStack>();
 

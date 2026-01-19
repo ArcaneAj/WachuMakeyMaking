@@ -3,6 +3,7 @@ using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using Lumina.Excel.Sheets;
+using SamplePlugin.Models;
 using SamplePlugin.Services;
 using System;
 using System.Collections.Generic;
@@ -17,6 +18,9 @@ public class MainWindow : Window, IDisposable
 {
     private readonly Plugin plugin;
     private readonly RecipeCacheService recipeCacheService;
+    private readonly SolverService solverService;
+
+    private static readonly bool CheckedDefault = false;
 
     // Track which recipes are selected (checked)
     private Dictionary<string, bool> recipeSelections = new();
@@ -32,7 +36,7 @@ public class MainWindow : Window, IDisposable
     // We give this window a hidden ID using ##.
     // The user will see "My Amazing Window" as window title,
     // but for ImGui the ID is "My Amazing Window##With a hidden ID"
-    public MainWindow(Plugin plugin, RecipeCacheService recipeCacheService)
+    public MainWindow(Plugin plugin, RecipeCacheService recipeCacheService, SolverService solverService)
         : base("My Amazing Window##With a hidden ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
         SizeConstraints = new WindowSizeConstraints
@@ -43,6 +47,7 @@ public class MainWindow : Window, IDisposable
 
         this.plugin = plugin;
         this.recipeCacheService = recipeCacheService;
+        this.solverService = solverService;
 
         if (false)
         {
@@ -144,13 +149,13 @@ public class MainWindow : Window, IDisposable
                 // Create a local snapshot of the cache to avoid race conditions
                 var cachedRecipes = recipeCacheService.CachedRecipes?.ToList() ?? [];
 
-                // Update recipe selections for any new recipes (default to checked)
+                // Update recipe selections for any new recipes
                 foreach (var recipe in cachedRecipes)
                 {
                     var recipeKey = recipe.Item.Name.ToString();
                     if (!recipeSelections.ContainsKey(recipeKey))
                     {
-                        recipeSelections[recipeKey] = true; // Default to checked
+                        recipeSelections[recipeKey] = CheckedDefault;
                     }
                 }
 
@@ -167,11 +172,28 @@ public class MainWindow : Window, IDisposable
 
                 ImGui.Text($"{cachedRecipes.Count} craftable recipes found ({selectedRecipes.Count} selected)");
 
+                ImGui.SameLine();
+                if (ImGui.Button("Solve"))
+                {
+                    // Log selected recipes with their values
+                    Plugin.Log.Info("Selected recipes for solving:");
+                    foreach (var recipe in selectedRecipes.OrderBy(r => r.Item.Name.ToString()))
+                    {
+                        // Calculate the display value (respecting manual overrides)
+                        var value = GetRecipeValue(recipe);
+                        Plugin.Log.Info($"  {recipe.Item.Name} - Value: {value} gil");
+                    }
+                    Plugin.Log.Info($"Total selected recipes: {selectedRecipes.Count}");
+
+                    // Call the solver service
+                    solverService.Solve(selectedRecipes, selectedRecipes.Select(GetRecipeValue).ToList());
+                }
+
                 if (cachedRecipes.Count > 0)
                 {
                     ImGuiHelpers.ScaledDummy(10.0f);
 
-                    var currencyGrouping = selectedRecipes.GroupBy(x => x.Currency.RowId).Where(x => x.Key != 1);
+                    var currencyGrouping = cachedRecipes.GroupBy(x => x.Currency.RowId).Where(x => x.Key != 1);
                     
                     // Clean up currency values for currencies that are no longer present
                     var currentCurrencyIds = new HashSet<uint>(currencyGrouping.Select(g => g.Key));
@@ -194,7 +216,7 @@ public class MainWindow : Window, IDisposable
                         }
 
                         var currencyValue = currencyValues[currencyId];
-                        if (ImGui.InputFloat($"{currency.Name} value", ref currencyValue, 0, 0, "%.2f"))
+                        if (ImGui.InputFloat($"{currency.Name} gil value", ref currencyValue, 0, 0, "%.2f"))
                         {
                             currencyValues[currencyId] = currencyValue;
                         }
@@ -213,15 +235,9 @@ public class MainWindow : Window, IDisposable
                     {
                         var recipeKey = recipe.Item.Name.ToString();
                         var isSelected = recipeSelections.GetValueOrDefault(recipeKey, false);
-                        var currencyId = recipe.Currency.RowId;
-                        var currencyMultiplier = currencyValues.GetValueOrDefault(currencyId, 1.0f);
-
-                        // Calculate base value
-                        var calculatedValue = Math.Min((int)Math.Floor(recipe.Value * currencyMultiplier), 999999);
 
                         // Get the displayed value (use override if exists, otherwise calculated)
-                        var hasOverride = recipeValueOverrides.TryGetValue(recipeKey, out var overrideValue);
-                        var value = hasOverride ? (overrideValue ?? calculatedValue) : calculatedValue;
+                        var value = GetRecipeValue(recipe);
 
                         // Editable value textbox (fixed width)
                         ImGui.SetNextItemWidth(80.0f); // Fixed width for the textbox
@@ -245,6 +261,20 @@ public class MainWindow : Window, IDisposable
                 }
             }
         }
+    }
+
+    private int GetRecipeValue(ModRecipeWithValue recipe)
+    {
+        var recipeKey = recipe.Item.Name.ToString();
+        var currencyId = recipe.Currency.RowId;
+        var currencyMultiplier = currencyValues.GetValueOrDefault(currencyId, 1.0f);
+
+        // Calculate base value with currency multiplier
+        var calculatedValue = Math.Min((int)Math.Floor(recipe.Value * currencyMultiplier), 999999);
+
+        // Return manual override if exists, otherwise calculated value
+        var hasOverride = recipeValueOverrides.TryGetValue(recipeKey, out var overrideValue);
+        return hasOverride ? Math.Min(overrideValue ?? calculatedValue, 999999) : calculatedValue;
     }
 
 }

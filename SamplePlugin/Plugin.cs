@@ -32,6 +32,7 @@ public sealed class Plugin : IDalamudPlugin
     private MainWindow MainWindow { get; init; }
     private UniversalisService UniversalisService { get; init; }
     private CollectableService CollectableService { get; init; }
+    private SolverService SolverService { get; init; }
     private RecipeCacheService RecipeCacheService { get; init; }
 
     public Plugin()
@@ -40,9 +41,10 @@ public sealed class Plugin : IDalamudPlugin
 
         UniversalisService = new UniversalisService(this);
         CollectableService = new CollectableService(this);
+        SolverService = new SolverService(this);
         RecipeCacheService = new RecipeCacheService(this, UniversalisService, CollectableService);
         ConfigWindow = new ConfigWindow(this);
-        MainWindow = new MainWindow(this, RecipeCacheService);
+        MainWindow = new MainWindow(this, RecipeCacheService, SolverService);
 
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(MainWindow);
@@ -76,6 +78,7 @@ public sealed class Plugin : IDalamudPlugin
         MainWindow.Dispose();
         UniversalisService.Dispose();
         RecipeCacheService.Dispose();
+        // SolverService doesn't implement IDisposable, so no need to dispose
 
         CommandManager.RemoveHandler(CommandName);
     }
