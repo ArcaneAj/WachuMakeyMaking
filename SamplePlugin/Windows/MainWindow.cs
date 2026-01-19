@@ -16,6 +16,9 @@ public class MainWindow : Window, IDisposable
     private readonly Plugin plugin;
     private readonly RecipeCacheService recipeCacheService;
 
+    // Track which recipes are selected (checked)
+    private Dictionary<string, bool> recipeSelections = new();
+
     // We give this window a hidden ID using ##.
     // The user will see "My Amazing Window" as window title,
     // but for ImGui the ID is "My Amazing Window##With a hidden ID"
@@ -37,6 +40,11 @@ public class MainWindow : Window, IDisposable
         // Service disposal is handled by the plugin
     }
 
+    private void ResetRecipeSelections()
+    {
+        recipeSelections.Clear();
+    }
+
     public override void Draw()
     {
         if (ImGui.Button("Show Settings"))
@@ -48,6 +56,7 @@ public class MainWindow : Window, IDisposable
         if (ImGui.Button("Force Refresh"))
         {
             recipeCacheService.ForceRefresh();
+            ResetRecipeSelections();
         }
 
         // Initialize cache if needed
@@ -80,21 +89,61 @@ public class MainWindow : Window, IDisposable
                 }
 
                 // Create a local snapshot of the cache to avoid race conditions
-                var cachedRecipes = recipeCacheService.CachedRecipes?.ToList() ?? new List<SamplePlugin.Models.ModRecipe>();
+                var cachedRecipes = recipeCacheService.CachedRecipes?.ToList() ?? [];
 
-                ImGui.Text($"{cachedRecipes.Count} craftable recipes found");
+                // Update recipe selections for any new recipes (default to checked)
+                foreach (var recipe in cachedRecipes)
+                {
+                    var recipeKey = recipe.Item.Name.ToString();
+                    if (!recipeSelections.ContainsKey(recipeKey))
+                    {
+                        recipeSelections[recipeKey] = true; // Default to checked
+                    }
+                }
+
+                // Remove selections for recipes that are no longer in cache
+                var currentRecipeKeys = new HashSet<string>(cachedRecipes.Select(r => r.Item.Name.ToString()));
+                var keysToRemove = recipeSelections.Keys.Where(key => !currentRecipeKeys.Contains(key)).ToList();
+                foreach (var key in keysToRemove)
+                {
+                    recipeSelections.Remove(key);
+                }
+
+                var selectedRecipes = cachedRecipes.Where(r => recipeSelections.GetValueOrDefault(r.Item.Name.ToString(), false)).ToList();
+
+                ImGui.Text($"{cachedRecipes.Count} craftable recipes found ({selectedRecipes.Count} selected)");
 
                 if (cachedRecipes.Count > 0)
                 {
                     ImGuiHelpers.ScaledDummy(10.0f);
                     ImGui.Text("Craftable Recipes:");
 
-                    using (ImRaii.PushIndent(20f))
+                    // Column headers
+                    ImGui.Text("Value");
+                    ImGui.SameLine(85.0f); // Position after the fixed-width textbox
+                    ImGui.Text("Recipe");
+                    ImGui.Separator();
+
+                    foreach (var recipe in cachedRecipes.OrderBy(r => r.Item.Name.ToString()))
                     {
-                        foreach (var recipe in cachedRecipes.OrderBy(r => r.Item.Name.ToString()))
+                        var recipeKey = recipe.Item.Name.ToString();
+                        var isSelected = recipeSelections.GetValueOrDefault(recipeKey, false);
+
+                        // Editable value textbox (fixed width)
+                        var value = (float)recipe.Value; // Convert double to float for ImGui
+                        ImGui.SetNextItemWidth(80.0f); // Fixed width for the textbox
+                        ImGui.InputFloat($"##value_{recipeKey}", ref value, 0, 0, "%.0f");
+
+                        ImGui.SameLine();
+
+                        // Checkbox
+                        if (ImGui.Checkbox($"##{recipeKey}", ref isSelected))
                         {
-                            ImGui.Text($"{recipe.Item.Name}");
+                            recipeSelections[recipeKey] = isSelected;
                         }
+
+                        ImGui.SameLine();
+                        ImGui.Text($"{recipe.Item.Name}");
                     }
                 }
             }
