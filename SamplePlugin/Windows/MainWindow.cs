@@ -26,7 +26,7 @@ public class MainWindow : Window, IDisposable
 
     // Track manual recipe value overrides (keyed by recipe key)
     // null means use calculated value, non-null means use this override
-    private Dictionary<string, float?> recipeValueOverrides = new();
+    private Dictionary<string, int?> recipeValueOverrides = new();
 
 
     // We give this window a hidden ID using ##.
@@ -171,7 +171,7 @@ public class MainWindow : Window, IDisposable
                 {
                     ImGuiHelpers.ScaledDummy(10.0f);
 
-                    var currencyGrouping = selectedRecipes.GroupBy(x => x.Currency.RowId);
+                    var currencyGrouping = selectedRecipes.GroupBy(x => x.Currency.RowId).Where(x => x.Key != 1);
                     
                     // Clean up currency values for currencies that are no longer present
                     var currentCurrencyIds = new HashSet<uint>(currencyGrouping.Select(g => g.Key));
@@ -217,25 +217,19 @@ public class MainWindow : Window, IDisposable
                         var currencyMultiplier = currencyValues.GetValueOrDefault(currencyId, 1.0f);
 
                         // Calculate base value
-                        var calculatedValue = Math.Floor(recipe.Value * currencyMultiplier);
+                        var calculatedValue = Math.Min((int)Math.Floor(recipe.Value * currencyMultiplier), 999999);
 
                         // Get the displayed value (use override if exists, otherwise calculated)
                         var hasOverride = recipeValueOverrides.TryGetValue(recipeKey, out var overrideValue);
-                        var value = hasOverride ? overrideValue.Value : (float)calculatedValue;
+                        var value = hasOverride ? (overrideValue ?? calculatedValue) : calculatedValue;
 
                         // Editable value textbox (fixed width)
                         ImGui.SetNextItemWidth(80.0f); // Fixed width for the textbox
-                        if (ImGui.InputFloat($"##value_{recipeKey}", ref value, 0, 0, "%.0f"))
+                        if (ImGui.InputInt($"##value_{recipeKey}", ref value))
                         {
-                            // User edited the value, store as override (preserves manual changes)
-                            recipeValueOverrides[recipeKey] = value;
+                            // Clamp to valid range (0-999999)
+                            recipeValueOverrides[recipeKey] = Math.Min(Math.Max(value, 0), 999999);
                         }
-                        else if (!hasOverride)
-                        {
-                            // No override exists and no edit - value will show calculated
-                            // No need to store anything, calculated value will be used next frame
-                        }
-                        // If override exists and no edit, keep the override (preserves manual changes)
 
                         ImGui.SameLine();
 
