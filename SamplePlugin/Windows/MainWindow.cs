@@ -2,7 +2,6 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
-using SamplePlugin.Models;
 using SamplePlugin.Services;
 using System;
 using System.Collections.Generic;
@@ -33,6 +32,15 @@ public class MainWindow : Window, IDisposable
 
         this.plugin = plugin;
         this.recipeCacheService = recipeCacheService;
+
+        //var lumina = new Lumina.GameData("G:\\SteamLibrary\\steamapps\\common\\FINAL FANTASY XIV Online\\game\\sqpack");
+        //var sheetNames = lumina.Excel.SheetNames;
+
+        //foreach (var name in sheetNames.Where(x => !x.StartsWith("quest/") && !x.StartsWith("custom/")))
+        //{
+        //    Plugin.Log.Info(name);
+        //}
+
     }
 
     public void Dispose()

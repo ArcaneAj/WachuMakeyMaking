@@ -14,15 +14,17 @@ public class RecipeCacheService : IDisposable
 {
     private readonly Plugin plugin;
     private readonly UniversalisService universalisService;
+    private readonly CollectableService collectableService;
 
     // Cache for recipes to avoid recalculating every frame
     private List<ModRecipeWithValue> cachedRecipes = new();
     private bool isCacheInitializing = false;
 
-    public RecipeCacheService(Plugin plugin, UniversalisService universalisService)
+    public RecipeCacheService(Plugin plugin, UniversalisService universalisService, CollectableService collectableService)
     {
         this.plugin = plugin;
         this.universalisService = universalisService;
+        this.collectableService = collectableService;
 
         // Subscribe to inventory changes
         Plugin.GameInventory.InventoryChanged += OnInventoryChanged;
@@ -125,7 +127,7 @@ public class RecipeCacheService : IDisposable
             using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var cancellationToken = cancellationTokenSource.Token;
 
-            var itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId);
+            var itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList();
             var recipesWithValues = new List<ModRecipeWithValue>();
             // Create a lookup dictionary for quick access to recipes by item ID
             var recipeLookup = craftableRecipes.ToDictionary(r => r.Item.RowId, r => r);
@@ -161,12 +163,12 @@ public class RecipeCacheService : IDisposable
             catch (OperationCanceledException)
             {
                 Plugin.Log.Warning("Universalis API request timed out after 10 seconds");
-                itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId); // All items failed due to timeout
+                itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList(); // All items failed due to timeout
             }
             catch (Exception ex)
             {
                 Plugin.Log.Error($"Error calling Universalis API: {ex.Message}");
-                itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId); // All items failed due to error
+                itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList(); // All items failed due to error
             }
 
             Plugin.Log.Info(string.Join(Environment.NewLine, itemsWithoutValue.Select(GetItemName)));
@@ -175,7 +177,10 @@ public class RecipeCacheService : IDisposable
             {
                 if (recipeLookup.TryGetValue(itemId, out var item))
                 {
-                    recipesWithValues.Add(new ModRecipeWithValue(item.Item, item.Ingredients, 0));
+                    // Check if this item is collectable
+                    var (isCollectable, scripType, scripValue) = collectableService.GetCollectableInfo(item.Item);
+                    recipesWithValues.Add(new ModRecipeWithValue(item.Item, item.Ingredients, scripValue, scripType));
+                    itemsWithoutValue.Remove(itemId);
                 }
             }
 

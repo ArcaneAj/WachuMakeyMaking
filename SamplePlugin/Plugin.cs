@@ -7,6 +7,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using SamplePlugin.Windows;
 using SamplePlugin.Services;
+using FFXIVClientStructs.FFXIV.Client.Game;
 
 namespace SamplePlugin;
 
@@ -30,6 +31,7 @@ public sealed class Plugin : IDalamudPlugin
     private ConfigWindow ConfigWindow { get; init; }
     private MainWindow MainWindow { get; init; }
     private UniversalisService UniversalisService { get; init; }
+    private CollectableService CollectableService { get; init; }
     private RecipeCacheService RecipeCacheService { get; init; }
 
     public Plugin()
@@ -37,7 +39,8 @@ public sealed class Plugin : IDalamudPlugin
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
         UniversalisService = new UniversalisService(this);
-        RecipeCacheService = new RecipeCacheService(this, UniversalisService);
+        CollectableService = new CollectableService(this);
+        RecipeCacheService = new RecipeCacheService(this, UniversalisService, CollectableService);
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this, RecipeCacheService);
 
@@ -46,7 +49,7 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "A useful message to display in /xlhelp"
+            HelpMessage = "\"/wymm\" can be used to toggle the window open/closed"
         });
 
         // Tell the UI system that we want our windows to be drawn through the window system
@@ -58,11 +61,6 @@ public sealed class Plugin : IDalamudPlugin
 
         // Adds another button doing the same but for the main ui of the plugin
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
-
-        // Add a simple message to the log with level set to information
-        // Use /xllog to open the log window in-game
-        // Example Output: 00:57:54.959 | INF | [SamplePlugin] ===A cool log message from Sample Plugin===
-        Log.Information($"===A cool log message from {PluginInterface.Manifest.Name}===");
     }
 
     public void Dispose()
