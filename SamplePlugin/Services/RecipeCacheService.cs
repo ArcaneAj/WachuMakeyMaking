@@ -41,6 +41,7 @@ public class RecipeCacheService : IDisposable
     public void ForceRefresh()
     {
         _cachedItemStacks = null;
+        _cachedRecipes.Clear();
         _isCacheInitializing = false;
     }
 
@@ -64,14 +65,21 @@ public class RecipeCacheService : IDisposable
     {
         try
         {
-            _cachedRecipes.Clear();
-            _cachedItemStacks = await Task.Run(() => GetBagItemStacks());
+            // Get a local copy of item stacks to avoid race conditions
+            var itemStacks = await Task.Run(() => GetBagItemStacks());
+
+            // Create a local recipes dictionary
+            var recipes = new Dictionary<uint, List<ModRecipe>>();
 
             // Calculate recipes for all items in inventory
-            foreach (var itemStack in _cachedItemStacks)
+            foreach (var itemStack in itemStacks)
             {
-                _cachedRecipes[itemStack.Id] = await Task.Run(() => FindRecipesWithIngredient(itemStack.Item));
+                recipes[itemStack.Id] = await Task.Run(() => FindRecipesWithIngredient(itemStack.Item));
             }
+
+            // Atomically update the cache
+            _cachedItemStacks = itemStacks;
+            _cachedRecipes = recipes;
         }
         finally
         {

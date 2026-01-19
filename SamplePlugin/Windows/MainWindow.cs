@@ -2,9 +2,12 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
-using System;
-using System.Numerics;
+using SamplePlugin.Models;
 using SamplePlugin.Services;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
 
 namespace SamplePlugin.Windows;
 
@@ -64,14 +67,16 @@ public class MainWindow : Window, IDisposable
                     return;
                 }
 
-                var cachedItemStacks = recipeCacheService.CachedItemStacks;
+                // Create a local snapshot of the cache to avoid race conditions
+                var cachedItemStacks = recipeCacheService.CachedItemStacks?.ToList() ?? new List<SamplePlugin.Models.ModItemStack>();
+                var cachedRecipes = recipeCacheService.CachedRecipes?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToList()) ?? new Dictionary<uint, List<SamplePlugin.Models.ModRecipe>>();
+
                 ImGui.Text($"{cachedItemStacks.Count} items with recipes found");
 
 
                 foreach (var itemStack in cachedItemStacks)
                 {
                     // Get cached recipes for this item
-                    var cachedRecipes = recipeCacheService.CachedRecipes;
                     if (!cachedRecipes.TryGetValue(itemStack.Id, out var recipes) || recipes.Count == 0)
                         continue;
 
