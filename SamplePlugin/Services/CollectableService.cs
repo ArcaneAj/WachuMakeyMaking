@@ -56,6 +56,8 @@ public class CollectableService
         var hWDCrafterSupplyReward = Plugin.DataManager.GetExcelSheet<HWDCrafterSupplyReward>();
         var hWDCrafterSupplyTerm = Plugin.DataManager.GetExcelSheet<HWDCrafterSupplyTerm>();
 
+        var skybuildersScrip = itemSheet.GetRow(28063);
+
         foreach (var handInType in hWDCrafterSupply)
         {
             foreach (var itemHandIn in handInType.HWDCrafterSupplyParams)
@@ -63,7 +65,7 @@ public class CollectableService
                 var scripId = itemHandIn.HighCollectableRewardPostPhase.RowId;
                 var scrip = hWDCrafterSupplyReward.GetRow(scripId).ScriptRewardAmount;
                 var item = itemSheet.GetRow(itemHandIn.ItemTradeIn.RowId);
-                restorationCache[item] = new ModItemStack(item, scripId, scrip);
+                restorationCache[item] = new ModItemStack(skybuildersScrip, scripId, scrip);
             }
         }
     }
