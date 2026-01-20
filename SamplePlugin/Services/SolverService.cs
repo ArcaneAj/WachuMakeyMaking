@@ -1,4 +1,3 @@
-using Lumina.Excel.Sheets;
 using SamplePlugin.Models;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,34 +28,38 @@ namespace SamplePlugin.Services
 
         public State CurrentState { get { return this.state; } }
 
-        internal void Solve(List<ModRecipeWithValue> selectedRecipes)
+        internal void Solve(List<ModRecipeWithValue> recipes)
         {
             this.state = State.InProgress;
             var crystals = this.recipeService.GetCrystals();
             var items = this.recipeService.GetConsolidatedItems();
             var resources = crystals.Concat(items).ToArray();
-            var recipes = selectedRecipes.Select(x => new RecipeAssignment(x.Value, x.Item, x.Ingredients));
+            var usedResources = resources.Where(x => recipes.Any(y => y.Ingredients.ContainsKey(x.Item)));
 
-            //model.Name = "RecipeChoice";
-            //model.Objective = recipes.Sum(a => a.Cost * a.Assign);
 
-            foreach (var resource in resources)
+            var costs = recipes.Select(x => x.Value).ToArray();
+
+            var constraints = new List<int>();
+            var assignments = new List<int[]>();
+
+            foreach (var resource in usedResources)
             {
                 Plugin.Log.Info($"{resource.Item.Name}");
+                constraints.Add(resource.Quantity);
+                var row = recipes.Select(recipe => (int)recipe.Ingredients.GetValueOrDefault(resource.Item)).ToArray();
+                assignments.Add(row);
+
                 var recipesUsingResource = recipes.Where(recipe => recipe.Ingredients.ContainsKey(resource.Item)).ToList();
                 foreach (var rur in recipesUsingResource)
                 {
                     Plugin.Log.Info($"    {rur.Item.Name}");
                 }
-                //model.Add($"Availability[{resource.Item.Name}]", recipesUsingResource.Sum(a => a.Ingredients[resource.Item] * a.Assign) <= resource.Quantity);
             }
         }
-    }
 
-    public class RecipeAssignment(double cost, Item item, Dictionary<Item, byte> ingredients)
-    {
-        public double Cost { get; private set; } = cost;
-        public Item Item { get; } = item;
-        public Dictionary<Item, byte> Ingredients { get; } = ingredients;
+        //private (List<double> solution, double optimalValue, State state) Solve()
+        //{
+
+        //}
     }
 }
