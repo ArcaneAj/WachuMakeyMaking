@@ -185,8 +185,10 @@ public class MainWindow : Window, IDisposable
                     }
                     Plugin.Log.Info($"Total selected recipes: {selectedRecipes.Count}");
 
+                    // We slight wiggle the costs in order to prefer one over the other in case of a tie
+                    var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) + 0.001 * index });
                     // Call the solver service
-                    solverService.Solve(selectedRecipes, selectedRecipes.Select(GetRecipeValue).ToList());
+                    solverService.Solve(recipes.ToList());
                 }
 
                 if (cachedRecipes.Count > 0)

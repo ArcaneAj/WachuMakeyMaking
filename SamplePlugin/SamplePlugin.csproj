@@ -7,4 +7,17 @@
     <IsPackable>false</IsPackable>
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
+  <ItemGroup>
+    <None Include="Ijwhost.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Sonnet">
+      <HintPath>..\Sonnet\x64\net6.0\Sonnet.dll</HintPath>
+    </Reference>
+    <Reference Include="SonnetWrapper">
+      <HintPath>..\Sonnet\x64\net6.0\SonnetWrapper.dll</HintPath>
+    </Reference>
+  </ItemGroup>
 </Project>

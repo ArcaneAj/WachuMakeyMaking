@@ -41,8 +41,8 @@ public sealed class Plugin : IDalamudPlugin
 
         UniversalisService = new UniversalisService(this);
         CollectableService = new CollectableService(this);
-        SolverService = new SolverService(this);
         RecipeCacheService = new RecipeCacheService(this, UniversalisService, CollectableService);
+        SolverService = new SolverService(this, RecipeCacheService);
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this, RecipeCacheService, SolverService);
 
