@@ -157,6 +157,8 @@ public class MainWindow : Window, IDisposable
                     {
                         recipeSelections[recipeKey] = CheckedDefault;
                     }
+
+                    if (recipe.Item.Name.ToString().Contains("Grade 4 Artisanal")) recipeSelections[recipeKey] = true;
                 }
 
                 // Remove selections and overrides for recipes that are no longer in cache

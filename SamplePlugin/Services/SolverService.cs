@@ -10,6 +10,7 @@ namespace SamplePlugin.Services
         private readonly Plugin plugin;
         private State state;
         private RecipeCacheService recipeService;
+        private Solution currentBest = null!;
 
         public enum State
         {
@@ -57,20 +58,40 @@ namespace SamplePlugin.Services
                 //}
             }
 
-            var result = Solve([.. assignments], costs, [.. constraints]);
+            var result = Solve([.. assignments], costs, [.. constraints], []);
+            this.currentBest = result;
 
-            if (result.state == State.Optimal)
+            var nodesToCheck = result.Values.Select((double val, int index) => (val, index)).Where(x => x.val - Math.Floor(x.val) > 1e-10).ToList();
+
+            //while (result.state == State.Optimal)
+            //{
+            //    var farthest = result.solution.Select((double x, int index) => (Math.Min(x - Math.Floor(x), Math.Ceiling(x) - x), index)).MaxBy(x => x.Item1).index;
+            //    if (farthest < 1e-10)
+            //    {
+            //        // Close enough to integral
+            //        break;
+            //    }
+
+            //    // Pick the result.solution[i] that has the closest value to an integer, and add 2 constraints above and below it
+            //    var closest = result.solution.Select((double x, int index) => (Math.Min(x - Math.Floor(x), Math.Ceiling(x) - x), index)).MinBy(x => x.Item1).index;
+            //    var row = new int[recipes.Count];
+            //    row[closest] = 1;
+            //    constraints.Add((int)Math.Floor(result.solution[closest]));
+            //    assignments.Add([.. row]);
+            //}
+
+            if (result.State == State.Optimal)
             {
                 Plugin.Log.Info("Optimal solution found:");
                 for (var i = 0; i < recipes.Count; i++)
                 {
-                    Plugin.Log.Info($"  Craft [{result.solution[i]}]: {recipes[i].Item.Name}");
+                    Plugin.Log.Info($"  Craft [{result.Values[i]}]: {recipes[i].Item.Name}");
                 }
 
-                Plugin.Log.Info($"Total value: {Math.Round(result.optimalValue)} gil");
+                Plugin.Log.Info($"Total value: {Math.Round(result.OptimalValue)} gil");
                 this.state = State.Optimal;
             }
-            else if (result.state == State.Unbounded)
+            else if (result.State == State.Unbounded)
             {
                 Plugin.Log.Info("Problem is unbounded - no optimal solution exists.");
                 this.state = State.Unbounded;
@@ -82,14 +103,14 @@ namespace SamplePlugin.Services
             }
         }
 
-        private (List<double> solution, double optimalValue, State state) Solve(int[][] assignments, double[] costs, int[] constraints)
+        private Solution Solve(int[][] assignments, double[] costs, int[] constraints, List<Branch> branches)
         {
             try
             {
                 // Validate input dimensions
                 if (assignments.Length == 0 || assignments[0].Length == 0 || assignments.Any(x => x.Length != assignments[0].Length))
                 {
-                    return (new List<double>(), 0, State.Error);
+                    return new Solution(new List<double>(), 0, State.Error, branches);
                 }
 
                 int m = assignments.Length; // number of constraints (resources)
@@ -97,8 +118,29 @@ namespace SamplePlugin.Services
 
                 if (costs.Length != n || constraints.Length != m)
                 {
-                    return (new List<double>(), 0, State.Error);
+                    return new Solution(new List<double>(), 0, State.Error, branches);
                 }
+
+                var branchConstraints = new List<int>();
+                var branchAssignments = new List<int[]>();
+
+                foreach (var branch in branches)
+                {
+                    var coeff = branch.IsPositive ? 1 : -1;
+                    var row = new int[costs.Length];
+                    row[branch.Index] = coeff;
+                    branchConstraints.Add(branch.Value * coeff);
+                    branchAssignments.Add([.. row]);
+                }
+
+                // Append branch constraints to create the full constraints array
+                var fullConstraints = constraints.Concat(branchConstraints).ToArray();
+
+                // Append branch assignments to create the full assignments array
+                var fullAssignments = assignments.Concat(branchAssignments).ToArray();
+
+                // Update m to include branch constraints
+                m = fullConstraints.Length;
 
                 // Convert to standard form: Ax ≤ b becomes Ax + s = b
                 // Initial basis: slack variables (indices n to n+m-1)
@@ -112,7 +154,7 @@ namespace SamplePlugin.Services
                 double[] x = new double[n + m];
                 for (int i = 0; i < m; i++)
                 {
-                    x[n + i] = constraints[i];
+                    x[n + i] = fullConstraints[i];
                 }
 
                 // Create augmented coefficient matrix [A | I]
@@ -123,7 +165,7 @@ namespace SamplePlugin.Services
                     // Copy original coefficients (convert int to double)
                     for (int j = 0; j < n; j++)
                     {
-                        A_augmented[i][j] = assignments[i][j];
+                        A_augmented[i][j] = fullAssignments[i][j];
                     }
                     // Add identity matrix for slack variables
                     for (int j = 0; j < m; j++)
@@ -151,20 +193,20 @@ namespace SamplePlugin.Services
                     {
                         solution.Add(result.x[i]);
                     }
-                    return (solution, result.optimalValue, State.Optimal);
+                    return new Solution(solution, result.optimalValue, State.Optimal, branches);
                 }
                 else if (result.status == "unbounded")
                 {
-                    return (new List<double>(), 0, State.Unbounded);
+                    return new Solution(new List<double>(), 0, State.Unbounded, branches);
                 }
                 else
                 {
-                    return (new List<double>(), 0, State.Error);
+                    return new Solution(new List<double>(), 0, State.Error, branches);
                 }
             }
             catch (Exception)
             {
-                return (new List<double>(), 0, State.Error);
+                return new Solution(new List<double>(), 0, State.Error, branches);
             }
         }
 
@@ -350,4 +392,12 @@ namespace SamplePlugin.Services
             return result;
         }
     }
+
+    public record Solution (
+        List<double> Values,
+        double OptimalValue,
+        SolverService.State State,
+        List<Branch> Branches);
+
+    public record Branch (int Index, int Value, bool IsPositive);
 }
