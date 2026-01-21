@@ -1,0 +1,1190 @@
+{
+	  "Recipes": [
+	    {
+	      "Item": {
+	        "RowId": 31954,
+	        "Name": "Grade 4 Artisanal Skybuilders\u0027 Chocobo Weathervane"
+	      },
+	      "Ingredients": [
+	        {
+	          "Item": {
+	            "RowId": 32001,
+	            "Name": "Approved Grade 4 Skybuilders\u0027 Umbral Galewood Branch"
+	          },
+	          "Quantity": 5
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31996,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Cloudstone"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 32000,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Prismstone"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31999,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Silex"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 14,
+	            "Name": "Fire Cluster"
+	          },
+	          "Quantity": 4
+	        },
+	        {
+	          "Item": {
+	            "RowId": 17,
+	            "Name": "Earth Cluster"
+	          },
+	          "Quantity": 2
+	        }
+	      ],
+	      "Value": 80,
+	      "Currency": {
+	        "RowId": 28063,
+	        "Name": "Skybuilders\u0027 Scrip"
+	      }
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31957,
+	        "Name": "Grade 4 Artisanal Skybuilders\u0027 Tool Belt"
+	      },
+	      "Ingredients": [
+	        {
+	          "Item": {
+	            "RowId": 32002,
+	            "Name": "Approved Grade 4 Skybuilders\u0027 Umbral Dirtleaf"
+	          },
+	          "Quantity": 5
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31993,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Caiman"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31999,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Silex"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31998,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Ice Stalagmite"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 17,
+	            "Name": "Earth Cluster"
+	          },
+	          "Quantity": 4
+	        },
+	        {
+	          "Item": {
+	            "RowId": 16,
+	            "Name": "Wind Cluster"
+	          },
+	          "Quantity": 2
+	        }
+	      ],
+	      "Value": 80.001,
+	      "Currency": {
+	        "RowId": 28063,
+	        "Name": "Skybuilders\u0027 Scrip"
+	      }
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31953,
+	        "Name": "Grade 4 Artisanal Skybuilders\u0027 Icebox"
+	      },
+	      "Ingredients": [
+	        {
+	          "Item": {
+	            "RowId": 32001,
+	            "Name": "Approved Grade 4 Skybuilders\u0027 Umbral Galewood Branch"
+	          },
+	          "Quantity": 5
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31998,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Ice Stalagmite"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31991,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Log"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31995,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Barbgrass"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 16,
+	            "Name": "Wind Cluster"
+	          },
+	          "Quantity": 4
+	        },
+	        {
+	          "Item": {
+	            "RowId": 15,
+	            "Name": "Ice Cluster"
+	          },
+	          "Quantity": 2
+	        }
+	      ],
+	      "Value": 80.002,
+	      "Currency": {
+	        "RowId": 28063,
+	        "Name": "Skybuilders\u0027 Scrip"
+	      }
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31960,
+	        "Name": "Grade 4 Artisanal Skybuilders\u0027 Sorbet"
+	      },
+	      "Ingredients": [
+	        {
+	          "Item": {
+	            "RowId": 32002,
+	            "Name": "Approved Grade 4 Skybuilders\u0027 Umbral Dirtleaf"
+	          },
+	          "Quantity": 5
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31998,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Ice Stalagmite"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31997,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Spring Water"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31992,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Raspberry"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 14,
+	            "Name": "Fire Cluster"
+	          },
+	          "Quantity": 4
+	        },
+	        {
+	          "Item": {
+	            "RowId": 19,
+	            "Name": "Water Cluster"
+	          },
+	          "Quantity": 2
+	        }
+	      ],
+	      "Value": 80.003,
+	      "Currency": {
+	        "RowId": 28063,
+	        "Name": "Skybuilders\u0027 Scrip"
+	      }
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31958,
+	        "Name": "Grade 4 Artisanal Skybuilders\u0027 Vest"
+	      },
+	      "Ingredients": [
+	        {
+	          "Item": {
+	            "RowId": 32004,
+	            "Name": "Approved Grade 4 Skybuilders\u0027 Umbral Levinsand"
+	          },
+	          "Quantity": 5
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31994,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Cocoon"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31997,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Spring Water"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31995,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Barbgrass"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 18,
+	            "Name": "Lightning Cluster"
+	          },
+	          "Quantity": 4
+	        },
+	        {
+	          "Item": {
+	            "RowId": 16,
+	            "Name": "Wind Cluster"
+	          },
+	          "Quantity": 2
+	        }
+	      ],
+	      "Value": 80.004,
+	      "Currency": {
+	        "RowId": 28063,
+	        "Name": "Skybuilders\u0027 Scrip"
+	      }
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31959,
+	        "Name": "Grade 4 Artisanal Skybuilders\u0027 Tincture"
+	      },
+	      "Ingredients": [
+	        {
+	          "Item": {
+	            "RowId": 32004,
+	            "Name": "Approved Grade 4 Skybuilders\u0027 Umbral Levinsand"
+	          },
+	          "Quantity": 5
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31993,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Caiman"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31994,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Cocoon"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 31992,
+	            "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Raspberry"
+	          },
+	          "Quantity": 10
+	        },
+	        {
+	          "Item": {
+	            "RowId": 19,
+	            "Name": "Water Cluster"
+	          },
+	          "Quantity": 4
+	        },
+	        {
+	          "Item": {
+	            "RowId": 18,
+	            "Name": "Lightning Cluster"
+	          },
+	          "Quantity": 2
+	        }
+	      ],
+	      "Value": 80.005,
+	      "Currency": {
+	        "RowId": 28063,
+	        "Name": "Skybuilders\u0027 Scrip"
+	      }
+	    }
+	  ],
+	  "Resources": [
+	    {
+	      "Item": {
+	        "RowId": 2,
+	        "Name": "Fire Shard"
+	      },
+	      "Quantity": 9656
+	    },
+	    {
+	      "Item": {
+	        "RowId": 3,
+	        "Name": "Ice Shard"
+	      },
+	      "Quantity": 678
+	    },
+	    {
+	      "Item": {
+	        "RowId": 4,
+	        "Name": "Wind Shard"
+	      },
+	      "Quantity": 144
+	    },
+	    {
+	      "Item": {
+	        "RowId": 5,
+	        "Name": "Earth Shard"
+	      },
+	      "Quantity": 112
+	    },
+	    {
+	      "Item": {
+	        "RowId": 6,
+	        "Name": "Lightning Shard"
+	      },
+	      "Quantity": 783
+	    },
+	    {
+	      "Item": {
+	        "RowId": 7,
+	        "Name": "Water Shard"
+	      },
+	      "Quantity": 1623
+	    },
+	    {
+	      "Item": {
+	        "RowId": 8,
+	        "Name": "Fire Crystal"
+	      },
+	      "Quantity": 6446
+	    },
+	    {
+	      "Item": {
+	        "RowId": 9,
+	        "Name": "Ice Crystal"
+	      },
+	      "Quantity": 9645
+	    },
+	    {
+	      "Item": {
+	        "RowId": 10,
+	        "Name": "Wind Crystal"
+	      },
+	      "Quantity": 9096
+	    },
+	    {
+	      "Item": {
+	        "RowId": 11,
+	        "Name": "Earth Crystal"
+	      },
+	      "Quantity": 8613
+	    },
+	    {
+	      "Item": {
+	        "RowId": 12,
+	        "Name": "Lightning Crystal"
+	      },
+	      "Quantity": 8298
+	    },
+	    {
+	      "Item": {
+	        "RowId": 13,
+	        "Name": "Water Crystal"
+	      },
+	      "Quantity": 4014
+	    },
+	    {
+	      "Item": {
+	        "RowId": 14,
+	        "Name": "Fire Cluster"
+	      },
+	      "Quantity": 5619
+	    },
+	    {
+	      "Item": {
+	        "RowId": 15,
+	        "Name": "Ice Cluster"
+	      },
+	      "Quantity": 6483
+	    },
+	    {
+	      "Item": {
+	        "RowId": 16,
+	        "Name": "Wind Cluster"
+	      },
+	      "Quantity": 585
+	    },
+	    {
+	      "Item": {
+	        "RowId": 17,
+	        "Name": "Earth Cluster"
+	      },
+	      "Quantity": 6448
+	    },
+	    {
+	      "Item": {
+	        "RowId": 18,
+	        "Name": "Lightning Cluster"
+	      },
+	      "Quantity": 4993
+	    },
+	    {
+	      "Item": {
+	        "RowId": 19,
+	        "Name": "Water Cluster"
+	      },
+	      "Quantity": 545
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44718,
+	        "Name": "Totem Eternal"
+	      },
+	      "Quantity": 10
+	    },
+	    {
+	      "Item": {
+	        "RowId": 46978,
+	        "Name": "Montiont Coin"
+	      },
+	      "Quantity": 3
+	    },
+	    {
+	      "Item": {
+	        "RowId": 27960,
+	        "Name": "Superior Spiritbond Potion"
+	      },
+	      "Quantity": 22
+	    },
+	    {
+	      "Item": {
+	        "RowId": 12669,
+	        "Name": "Hi-Cordial"
+	      },
+	      "Quantity": 148
+	    },
+	    {
+	      "Item": {
+	        "RowId": 14952,
+	        "Name": "Squadron Rationing Manual"
+	      },
+	      "Quantity": 9
+	    },
+	    {
+	      "Item": {
+	        "RowId": 47101,
+	        "Name": "Guardian Arkveld Certificate"
+	      },
+	      "Quantity": 2
+	    },
+	    {
+	      "Item": {
+	        "RowId": 6141,
+	        "Name": "Cordial"
+	      },
+	      "Quantity": 336
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44041,
+	        "Name": "Windsbalm Bay Leaf"
+	      },
+	      "Quantity": 78
+	    },
+	    {
+	      "Item": {
+	        "RowId": 38808,
+	        "Name": "Select Bait Ball"
+	      },
+	      "Quantity": 127
+	    },
+	    {
+	      "Item": {
+	        "RowId": 36060,
+	        "Name": "Tsai tou Vounou"
+	      },
+	      "Quantity": 9
+	    },
+	    {
+	      "Item": {
+	        "RowId": 38956,
+	        "Name": "Hyper-Potion"
+	      },
+	      "Quantity": 48
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44169,
+	        "Name": "Cunning Craftsman\u0027s Tisane"
+	      },
+	      "Quantity": 83
+	    },
+	    {
+	      "Item": {
+	        "RowId": 40295,
+	        "Name": "Voidcast Archfiend Totem"
+	      },
+	      "Quantity": 24
+	    },
+	    {
+	      "Item": {
+	        "RowId": 12712,
+	        "Name": "Giant Crane Fly"
+	      },
+	      "Quantity": 99
+	    },
+	    {
+	      "Item": {
+	        "RowId": 29717,
+	        "Name": "Versatile Lure"
+	      },
+	      "Quantity": 30
+	    },
+	    {
+	      "Item": {
+	        "RowId": 27587,
+	        "Name": "Robber Ball"
+	      },
+	      "Quantity": 84
+	    },
+	    {
+	      "Item": {
+	        "RowId": 27841,
+	        "Name": "Upland Wheat Flour"
+	      },
+	      "Quantity": 52
+	    },
+	    {
+	      "Item": {
+	        "RowId": 14954,
+	        "Name": "Priority Aetheryte Pass"
+	      },
+	      "Quantity": 15
+	    },
+	    {
+	      "Item": {
+	        "RowId": 2599,
+	        "Name": "Honey Worm"
+	      },
+	      "Quantity": 47
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44033,
+	        "Name": "Thunderyards Silk"
+	      },
+	      "Quantity": 42
+	    },
+	    {
+	      "Item": {
+	        "RowId": 43858,
+	        "Name": "Red Maggots"
+	      },
+	      "Quantity": 38
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44013,
+	        "Name": "Magnesia Whetstone"
+	      },
+	      "Quantity": 4
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49243,
+	        "Name": "Rroneek au Gratin"
+	      },
+	      "Quantity": 190
+	    },
+	    {
+	      "Item": {
+	        "RowId": 46003,
+	        "Name": "Mate Cookie"
+	      },
+	      "Quantity": 125
+	    },
+	    {
+	      "Item": {
+	        "RowId": 36255,
+	        "Name": "Ovibos Milk"
+	      },
+	      "Quantity": 435
+	    },
+	    {
+	      "Item": {
+	        "RowId": 28724,
+	        "Name": "Crafter\u0027s Delineation"
+	      },
+	      "Quantity": 750
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49234,
+	        "Name": "Grade 4 Gemdraught of Strength"
+	      },
+	      "Quantity": 228
+	    },
+	    {
+	      "Item": {
+	        "RowId": 36591,
+	        "Name": "Mayfly"
+	      },
+	      "Quantity": 58
+	    },
+	    {
+	      "Item": {
+	        "RowId": 39591,
+	        "Name": "Timeworn Ophiotauroskin Map"
+	      },
+	      "Quantity": 1
+	    },
+	    {
+	      "Item": {
+	        "RowId": 33916,
+	        "Name": "Grade 8 Dark Matter"
+	      },
+	      "Quantity": 477
+	    },
+	    {
+	      "Item": {
+	        "RowId": 36594,
+	        "Name": "Grey Worm"
+	      },
+	      "Quantity": 175
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31575,
+	        "Name": "Harrowing Memory of the Dying"
+	      },
+	      "Quantity": 12
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31996,
+	        "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Cloudstone"
+	      },
+	      "Quantity": 1141
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49760,
+	        "Name": "AAC Illustrated: HW Edition I"
+	      },
+	      "Quantity": 2
+	    },
+	    {
+	      "Item": {
+	        "RowId": 13584,
+	        "Name": "Unidentifiable Shell"
+	      },
+	      "Quantity": 128
+	    },
+	    {
+	      "Item": {
+	        "RowId": 5753,
+	        "Name": "Aldgoat Brown Dye"
+	      },
+	      "Quantity": 9
+	    },
+	    {
+	      "Item": {
+	        "RowId": 41807,
+	        "Name": "Mount Token"
+	      },
+	      "Quantity": 6
+	    },
+	    {
+	      "Item": {
+	        "RowId": 7621,
+	        "Name": "Glamour Dispeller"
+	      },
+	      "Quantity": 101
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44012,
+	        "Name": "Black Star"
+	      },
+	      "Quantity": 86
+	    },
+	    {
+	      "Item": {
+	        "RowId": 21800,
+	        "Name": "Glamour Prism"
+	      },
+	      "Quantity": 313
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31999,
+	        "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Silex"
+	      },
+	      "Quantity": 88
+	    },
+	    {
+	      "Item": {
+	        "RowId": 4570,
+	        "Name": "Phoenix Down"
+	      },
+	      "Quantity": 26
+	    },
+	    {
+	      "Item": {
+	        "RowId": 27838,
+	        "Name": "Frantoio Oil"
+	      },
+	      "Quantity": 62
+	    },
+	    {
+	      "Item": {
+	        "RowId": 32000,
+	        "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Prismstone"
+	      },
+	      "Quantity": 691
+	    },
+	    {
+	      "Item": {
+	        "RowId": 43985,
+	        "Name": "Yyasulani Garlic"
+	      },
+	      "Quantity": 19
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44051,
+	        "Name": "Sanctified Water"
+	      },
+	      "Quantity": 428
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49238,
+	        "Name": "Grade 4 Gemdraught of Mind"
+	      },
+	      "Quantity": 48
+	    },
+	    {
+	      "Item": {
+	        "RowId": 47866,
+	        "Name": "Aetherspun Gold"
+	      },
+	      "Quantity": 3
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44071,
+	        "Name": "Tumbleclaw Weeds"
+	      },
+	      "Quantity": 120
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44001,
+	        "Name": "Ra\u0027Kaznar Ingot"
+	      },
+	      "Quantity": 88
+	    },
+	    {
+	      "Item": {
+	        "RowId": 4868,
+	        "Name": "Gysahl Greens"
+	      },
+	      "Quantity": 19
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44023,
+	        "Name": "Claro Walnut Lumber"
+	      },
+	      "Quantity": 128
+	    },
+	    {
+	      "Item": {
+	        "RowId": 4720,
+	        "Name": "Fish Soup"
+	      },
+	      "Quantity": 71
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31998,
+	        "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Ice Stalagmite"
+	      },
+	      "Quantity": 1065
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31997,
+	        "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Spring Water"
+	      },
+	      "Quantity": 1252
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49210,
+	        "Name": "Carnauba Leaf"
+	      },
+	      "Quantity": 12
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31993,
+	        "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Caiman"
+	      },
+	      "Quantity": 695
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49211,
+	        "Name": "Urqopacha Flax"
+	      },
+	      "Quantity": 17
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44043,
+	        "Name": "Pearl Grass"
+	      },
+	      "Quantity": 51
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44034,
+	        "Name": "Yak T\u0027el Spring Water"
+	      },
+	      "Quantity": 144
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44091,
+	        "Name": "Rroneek Steak"
+	      },
+	      "Quantity": 67
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44039,
+	        "Name": "Wind Parsley"
+	      },
+	      "Quantity": 15
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31995,
+	        "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Barbgrass"
+	      },
+	      "Quantity": 150
+	    },
+	    {
+	      "Item": {
+	        "RowId": 47100,
+	        "Name": "Guardian Scale"
+	      },
+	      "Quantity": 6
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49240,
+	        "Name": "Caramel Popcorn"
+	      },
+	      "Quantity": 1094
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44040,
+	        "Name": "Kozama\u0027uka Chamomile"
+	      },
+	      "Quantity": 63
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31991,
+	        "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Log"
+	      },
+	      "Quantity": 556
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49218,
+	        "Name": "Grade 4 Gemsap of Strength"
+	      },
+	      "Quantity": 7
+	    },
+	    {
+	      "Item": {
+	        "RowId": 43944,
+	        "Name": "Cracked Novacluster"
+	      },
+	      "Quantity": 26
+	    },
+	    {
+	      "Item": {
+	        "RowId": 38945,
+	        "Name": "Bronze-tinged Sack"
+	      },
+	      "Quantity": 2
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49207,
+	        "Name": "Fulgurpine Log"
+	      },
+	      "Quantity": 29
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44022,
+	        "Name": "Acacia Lumber"
+	      },
+	      "Quantity": 22
+	    },
+	    {
+	      "Item": {
+	        "RowId": 43540,
+	        "Name": "Resilient Totem"
+	      },
+	      "Quantity": 26
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31994,
+	        "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Cocoon"
+	      },
+	      "Quantity": 469
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44062,
+	        "Name": "Gargantua Leather"
+	      },
+	      "Quantity": 49
+	    },
+	    {
+	      "Item": {
+	        "RowId": 43539,
+	        "Name": "Skyruin Totem"
+	      },
+	      "Quantity": 39
+	    },
+	    {
+	      "Item": {
+	        "RowId": 38941,
+	        "Name": "Orthos Aetherpool Fragment"
+	      },
+	      "Quantity": 1
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31992,
+	        "Name": "Approved Grade 4 Artisanal Skybuilders\u0027 Raspberry"
+	      },
+	      "Quantity": 100
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49208,
+	        "Name": "Dense Aluminum Ore"
+	      },
+	      "Quantity": 56
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49755,
+	        "Name": "Heavy Holoblade"
+	      },
+	      "Quantity": 5
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49209,
+	        "Name": "Rose Garnet Ore"
+	      },
+	      "Quantity": 57
+	    },
+	    {
+	      "Item": {
+	        "RowId": 44042,
+	        "Name": "Eucalyptus"
+	      },
+	      "Quantity": 78
+	    },
+	    {
+	      "Item": {
+	        "RowId": 46246,
+	        "Name": "Levinchrome Aethersand"
+	      },
+	      "Quantity": 25
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49212,
+	        "Name": "Windspath Water"
+	      },
+	      "Quantity": 26
+	    },
+	    {
+	      "Item": {
+	        "RowId": 32004,
+	        "Name": "Approved Grade 4 Skybuilders\u0027 Umbral Levinsand"
+	      },
+	      "Quantity": 240
+	    },
+	    {
+	      "Item": {
+	        "RowId": 43977,
+	        "Name": "Mountain Salt"
+	      },
+	      "Quantity": 23
+	    },
+	    {
+	      "Item": {
+	        "RowId": 32002,
+	        "Name": "Approved Grade 4 Skybuilders\u0027 Umbral Dirtleaf"
+	      },
+	      "Quantity": 225
+	    },
+	    {
+	      "Item": {
+	        "RowId": 32001,
+	        "Name": "Approved Grade 4 Skybuilders\u0027 Umbral Galewood Branch"
+	      },
+	      "Quantity": 255
+	    },
+	    {
+	      "Item": {
+	        "RowId": 47343,
+	        "Name": "Phaenna Token Booklet"
+	      },
+	      "Quantity": 12
+	    },
+	    {
+	      "Item": {
+	        "RowId": 36027,
+	        "Name": "Cracked Anthocluster"
+	      },
+	      "Quantity": 121
+	    },
+	    {
+	      "Item": {
+	        "RowId": 36025,
+	        "Name": "Cracked Dendrocluster"
+	      },
+	      "Quantity": 128
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49219,
+	        "Name": "Grade 4 Gemsap of Dexterity"
+	      },
+	      "Quantity": 20
+	    },
+	    {
+	      "Item": {
+	        "RowId": 43942,
+	        "Name": "Cracked Prismaticluster"
+	      },
+	      "Quantity": 41
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49748,
+	        "Name": "Runaway Totem"
+	      },
+	      "Quantity": 40
+	    },
+	    {
+	      "Item": {
+	        "RowId": 47594,
+	        "Name": "Phaenna Exploration Token"
+	      },
+	      "Quantity": 31
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49228,
+	        "Name": "Yollal Extract"
+	      },
+	      "Quantity": 232
+	    },
+	    {
+	      "Item": {
+	        "RowId": 49754,
+	        "Name": "Heavy Holoring"
+	      },
+	      "Quantity": 1
+	    },
+	    {
+	      "Item": {
+	        "RowId": 39593,
+	        "Name": "Potentially Special Timeworn Map"
+	      },
+	      "Quantity": 21
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31573,
+	        "Name": "Tortured Memory of the Dying"
+	      },
+	      "Quantity": 20
+	    },
+	    {
+	      "Item": {
+	        "RowId": 31574,
+	        "Name": "Sorrowful Memory of the Dying"
+	      },
+	      "Quantity": 20
+	    },
+	    {
+	      "Item": {
+	        "RowId": 27835,
+	        "Name": "Lemonette"
+	      },
+	      "Quantity": 448
+	    },
+	    {
+	      "Item": {
+	        "RowId": 36061,
+	        "Name": "Sideritis Cookie"
+	      },
+	      "Quantity": 97
+	    },
+	    {
+	      "Item": {
+	        "RowId": 30590,
+	        "Name": "Levinstrike Aethersand"
+	      },
+	      "Quantity": 33
+	    },
+	    {
+	      "Item": {
+	        "RowId": 48158,
+	        "Name": "Magicked Prism (Cosmic Exploration)"
+	      },
+	      "Quantity": 40
+	    }
+	  ]
+	}

@@ -39,7 +39,7 @@ public sealed class Plugin : IDalamudPlugin
         UniversalisService = new UniversalisService(this);
         CollectableService = new CollectableService(this);
         RecipeCacheService = new RecipeCacheService(this, UniversalisService, CollectableService);
-        SolverService = new SolverService((string l) => Log.Info(l));
+        SolverService = new SolverService((string l) => Log.Info(l), (string l) => Log.Error(l));
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this, RecipeCacheService, SolverService);
 

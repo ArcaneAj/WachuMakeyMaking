@@ -178,17 +178,7 @@ public class MainWindow : Window, IDisposable
                 ImGui.SameLine();
                 if (ImGui.Button("Solve"))
                 {
-                    // Log selected recipes with their values
-                    Plugin.Log.Info("Selected recipes for solving:");
-                    foreach (var recipe in selectedRecipes.OrderBy(r => r.Item.Name.ToString()))
-                    {
-                        // Calculate the display value (respecting manual overrides)
-                        var value = GetRecipeValue(recipe);
-                        Plugin.Log.Info($"  {recipe.Item.Name} - Value: {value} gil");
-                    }
-                    Plugin.Log.Info($"Total selected recipes: {selectedRecipes.Count}");
-
-                    // We slight wiggle the costs in order to prefer one over the other in case of a tie
+                    // We slight wiggle the costs in order to prefer one over the other to avoid degeneracy
                     var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) + 0.001 * index });
                     // Call the solver service
                     Task.Run(() => solverService.Solve(

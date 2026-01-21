@@ -2,12 +2,14 @@ using WachuMakeyMaking.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 
 namespace WachuMakeyMaking.Services
 {
     public class SolverService
     {
         private readonly Action<string> log;
+        private readonly Action<string> logError;
         private State state;
         private Solution currentBest = null!;
         private double lowerBound = 0.0;
@@ -22,9 +24,10 @@ namespace WachuMakeyMaking.Services
             Error
         }
 
-        public SolverService(Action<string> log)
+        public SolverService(Action<string> log, Action<string> logError)
         {
             this.log = log;
+            this.logError = logError;
             this.state = State.Idle;
         }
 
@@ -33,6 +36,40 @@ namespace WachuMakeyMaking.Services
         public Solution Solve(List<ModRecipeWithValue> recipes, ModItemStack[] resources)
         {
             this.state = State.InProgress;
+
+            if (false) {
+                // Serialize recipes and resources to JSON and log
+                var serializableRecipes = recipes.Select(r => new
+                {
+                    Item = new { r.Item.RowId, r.Item.Name },
+                    Ingredients = r.Ingredients.Select(kvp => new
+                    {
+                        Item = new { kvp.Key.RowId, kvp.Key.Name },
+                        Quantity = kvp.Value
+                    }).ToList(),
+                    r.Value,
+                    Currency = new { r.Currency.RowId, r.Currency.Name }
+                }).ToList();
+
+                var serializableResources = resources.Select(r => new
+                {
+                    Item = new { r.Item.RowId, r.Item.Name },
+                    r.Quantity
+                }).ToList();
+
+                var inputData = new
+                {
+                    Recipes = serializableRecipes,
+                    Resources = serializableResources
+                };
+                var jsonOptions = new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                };
+                var jsonString = JsonSerializer.Serialize(inputData, jsonOptions);
+                this.log($"{jsonString}");
+            }
+
             this.recipes = recipes;
             var usedResources = resources.Where(x => recipes.Any(y => y.Ingredients.ContainsKey(x.Item)));
 
@@ -43,22 +80,16 @@ namespace WachuMakeyMaking.Services
 
             foreach (var resource in usedResources)
             {
-                //this.log($"{resource.Item.Name}");
                 constraintsList.Add(resource.Quantity);
                 var row = recipes.Select(recipe => (int)recipe.Ingredients.GetValueOrDefault(resource.Item));
                 assignmentsList.Add([..row]);
 
                 var recipesUsingResource = recipes.Where(recipe => recipe.Ingredients.ContainsKey(resource.Item)).ToList();
-                //foreach (var rur in recipesUsingResource)
-                //{
-                //    this.log($"    {rur.Item.Name}");
-                //}
             }
 
             var branches = new Stack<Branch>();
             var problem = new Problem(assignmentsList.ToArray(), costs, constraintsList.ToArray());
             var result = Solve(problem, branches);
-            result.Print(recipes, log);
             if (result.State == State.Unbounded)
             {
                 this.log("Problem is unbounded - no optimal solution exists.");
@@ -105,7 +136,6 @@ namespace WachuMakeyMaking.Services
                 if (previousResult.OptimalValue < (this.currentBest?.OptimalValue ?? 0.0)){
                     this.currentBest = previousResult;
                     this.log($"New best integral solution found: {previousResult.OptimalValue}");
-                    previousResult.Print(this.recipes, log);
                 }
                 return Math.Abs(previousResult.OptimalValue - this.lowerBound) < 1e-10;
             }
@@ -120,8 +150,12 @@ namespace WachuMakeyMaking.Services
             var positiveBranches = new Stack<Branch>(previousResult.Branches.Reverse());
             positiveBranches.Push(positiveBranch);
 
-            this.log($"Branching on variable {branchVar.index}: <= {floorVal}");
             var positiveResult = Solve(problem, positiveBranches);
+            if (positiveResult.OptimalValue < this.lowerBound)
+            {
+                this.logError("Branch result was below the lower bound, something very wrong must have happened.");
+            }
+
             if (positiveResult.State == State.Optimal)
             {
                 // Verify the solution satisfies the branch constraint
@@ -132,7 +166,6 @@ namespace WachuMakeyMaking.Services
                 }
                 else
                 {
-                    positiveResult.Print(this.recipes, log);
                     // Only explore further if this could be better than current best
                     if (this.currentBest == null || positiveResult.OptimalValue < this.currentBest.OptimalValue)
                     {
@@ -146,7 +179,6 @@ namespace WachuMakeyMaking.Services
             var negativeBranches = new Stack<Branch>(previousResult.Branches.Reverse());
             negativeBranches.Push(negativeBranch);
 
-            this.log($"Branching on variable {branchVar.index}: >= {ceilVal}");
             var negativeResult = Solve(problem, negativeBranches);
             if (negativeResult.State == State.Optimal)
             {
@@ -158,7 +190,6 @@ namespace WachuMakeyMaking.Services
                 }
                 else
                 {
-                    negativeResult.Print(this.recipes, log);
                     // Only explore further if this could be better than current best
                     if (this.currentBest == null || negativeResult.OptimalValue < this.currentBest.OptimalValue)
                     {
@@ -391,6 +422,14 @@ namespace WachuMakeyMaking.Services
                 // Update solution and basis
                 int leavingVarIndex = basis[leavingVar];
                 double theta = x[leavingVarIndex] / d[leavingVar];
+
+                // Update all basic variables: x_B = x_B - theta * d
+                for (int i = 0; i < m; i++)
+                {
+                    x[basis[i]] -= theta * d[i];
+                }
+
+                // Set entering variable to theta and leaving variable to 0
                 x[enteringVar] = theta;
                 x[leavingVarIndex] = 0;
 
