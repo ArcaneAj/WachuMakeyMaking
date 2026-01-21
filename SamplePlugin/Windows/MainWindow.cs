@@ -11,6 +11,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace SamplePlugin.Windows;
 
@@ -190,7 +191,7 @@ public class MainWindow : Window, IDisposable
                     // We slight wiggle the costs in order to prefer one over the other in case of a tie
                     var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) + 0.001 * index });
                     // Call the solver service
-                    solverService.Solve(recipes.ToList());
+                    Task.Run(() => solverService.Solve(recipes.ToList()));
                 }
 
                 if (cachedRecipes.Count > 0)

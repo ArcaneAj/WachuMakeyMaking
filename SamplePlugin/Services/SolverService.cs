@@ -11,6 +11,8 @@ namespace SamplePlugin.Services
         private State state;
         private RecipeCacheService recipeService;
         private Solution currentBest = null!;
+        private double lowerBound = 0.0;
+        private List<ModRecipeWithValue> recipes = [];
 
         public enum State
         {
@@ -30,9 +32,10 @@ namespace SamplePlugin.Services
 
         public State CurrentState { get { return this.state; } }
 
-        public void Solve(List<ModRecipeWithValue> recipes)
+        public Solution Solve(List<ModRecipeWithValue> recipes)
         {
             this.state = State.InProgress;
+            this.recipes = recipes;
             var crystals = this.recipeService.GetCrystals();
             var items = this.recipeService.GetConsolidatedItems();
             var resources = crystals.Concat(items).ToArray();
@@ -41,15 +44,15 @@ namespace SamplePlugin.Services
 
             var costs = recipes.Select(x => -x.Value).ToArray();
 
-            var constraints = new List<int>();
-            var assignments = new List<int[]>();
+            var constraintsList = new List<int>();
+            var assignmentsList = new List<int[]>();
 
             foreach (var resource in usedResources)
             {
                 //Plugin.Log.Info($"{resource.Item.Name}");
-                constraints.Add(resource.Quantity);
+                constraintsList.Add(resource.Quantity);
                 var row = recipes.Select(recipe => (int)recipe.Ingredients.GetValueOrDefault(resource.Item));
-                assignments.Add([..row]);
+                assignmentsList.Add([..row]);
 
                 var recipesUsingResource = recipes.Where(recipe => recipe.Ingredients.ContainsKey(resource.Item)).ToList();
                 //foreach (var rur in recipesUsingResource)
@@ -58,65 +61,108 @@ namespace SamplePlugin.Services
                 //}
             }
 
-            var result = Solve([.. assignments], costs, [.. constraints], []);
-            this.currentBest = result;
-
-            var nodesToCheck = result.Values.Select((double val, int index) => (val, index)).Where(x => x.val - Math.Floor(x.val) > 1e-10).ToList();
-
-            //while (result.state == State.Optimal)
-            //{
-            //    var farthest = result.solution.Select((double x, int index) => (Math.Min(x - Math.Floor(x), Math.Ceiling(x) - x), index)).MaxBy(x => x.Item1).index;
-            //    if (farthest < 1e-10)
-            //    {
-            //        // Close enough to integral
-            //        break;
-            //    }
-
-            //    // Pick the result.solution[i] that has the closest value to an integer, and add 2 constraints above and below it
-            //    var closest = result.solution.Select((double x, int index) => (Math.Min(x - Math.Floor(x), Math.Ceiling(x) - x), index)).MinBy(x => x.Item1).index;
-            //    var row = new int[recipes.Count];
-            //    row[closest] = 1;
-            //    constraints.Add((int)Math.Floor(result.solution[closest]));
-            //    assignments.Add([.. row]);
-            //}
-
-            if (result.State == State.Optimal)
-            {
-                Plugin.Log.Info("Optimal solution found:");
-                for (var i = 0; i < recipes.Count; i++)
-                {
-                    Plugin.Log.Info($"  Craft [{result.Values[i]}]: {recipes[i].Item.Name}");
-                }
-
-                Plugin.Log.Info($"Total value: {Math.Round(result.OptimalValue)} gil");
-                this.state = State.Optimal;
-            }
-            else if (result.State == State.Unbounded)
+            var branches = new Stack<Branch>();
+            var problem = new Problem(assignmentsList.ToArray(), costs, constraintsList.ToArray());
+            var result = Solve(problem, branches);
+            result.Print(recipes);
+            if (result.State == State.Unbounded)
             {
                 Plugin.Log.Info("Problem is unbounded - no optimal solution exists.");
                 this.state = State.Unbounded;
+                return new Solution([], 0, State.Error, []);
+            }
+            if (result.State != State.Optimal)
+            {
+                Plugin.Log.Info("Unknown error occurred when finding initial solution.");
+                this.state = result.State;
+                return new Solution([], 0, State.Error, []);
+            }
+
+            this.lowerBound = result.OptimalValue;
+            BranchAndBound(problem, result);
+
+            if (this.currentBest == null)
+            {
+                Plugin.Log.Info("Unable to find integral solution");
+                return new Solution([], 0, State.Error, []);
+            }
+
+            if (this.currentBest.State == State.Optimal)
+            {
+                Plugin.Log.Info("Optimal solution found:");
+                this.currentBest.Print(recipes);
+                this.state = State.Optimal;
             }
             else
             {
                 Plugin.Log.Info("No optimal solution found.");
                 this.state = State.Error;
             }
+
+            return this.currentBest;
         }
 
-        private Solution Solve(int[][] assignments, double[] costs, int[] constraints, List<Branch> branches)
+        private bool BranchAndBound(Problem problem, Solution previousResult)
+        {
+            var valuesToBranch = previousResult.Values.Select((double val, int index) => (val, index)).Where(x => x.val - Math.Floor(x.val) > 1e-10).ToList();
+            // If we're integral
+            if (valuesToBranch.Count == 0) {
+                // And we're better than the existing solution (or 0 if the existing solution doesn't exist)
+                if (previousResult.OptimalValue < (this.currentBest?.OptimalValue ?? 0.0)){
+                    // This is now the best solution
+                    this.currentBest = previousResult;
+                    // Return true if we manage to hit the lower bound
+                    if (Math.Abs(previousResult.OptimalValue - this.lowerBound) > 1e-10) return true;
+                }
+                    
+                Plugin.Log.Info($"CurrentBest {previousResult.OptimalValue}");
+            };
+
+            // For each value to branch, we should create both the upper and lower branches
+            var positiveBranches = valuesToBranch.Select(x => new Branch(x.index, (int)Math.Floor(x.val), true));
+            var negativeBranches = valuesToBranch.Select(x => new Branch(x.index, (int)Math.Ceiling(x.val), false));
+
+            foreach (var branch in positiveBranches.Concat(negativeBranches))
+            {
+                previousResult.Branches.Push(branch);
+                foreach (var item in previousResult.Branches)
+                {
+                    Plugin.Log.Info($"Branching on: {item.Index} {item.Value} {item.IsPositive}");
+                }
+
+                var newResult = Solve(problem, previousResult.Branches);
+                newResult.Print(this.recipes);
+
+                // If what we just did is worse than the current best, we can abandon this recursion path
+                if (this.currentBest != null && newResult.OptimalValue > this.currentBest.OptimalValue){
+                    // We remove this branch from the stack
+                    _ = previousResult.Branches.Pop();
+                    // And we try the next branch horizontally
+                    continue;
+                }
+                
+                var boundHit = BranchAndBound(problem, newResult);
+                if (boundHit) return true;
+                _ = previousResult.Branches.Pop();
+            }
+
+            return false;
+        }
+
+        private Solution Solve(Problem problem, Stack<Branch> branches)
         {
             try
             {
                 // Validate input dimensions
-                if (assignments.Length == 0 || assignments[0].Length == 0 || assignments.Any(x => x.Length != assignments[0].Length))
+                if (problem.Assignments.Length == 0 || problem.Assignments[0].Length == 0 || problem.Assignments.Any(x => x.Length != problem.Assignments[0].Length))
                 {
                     return new Solution(new List<double>(), 0, State.Error, branches);
                 }
 
-                int m = assignments.Length; // number of constraints (resources)
-                int n = assignments[0].Length; // number of variables (recipes)
+                int m = problem.Assignments.Length; // number of constraints (resources)
+                int n = problem.Assignments[0].Length; // number of variables (recipes)
 
-                if (costs.Length != n || constraints.Length != m)
+                if (problem.Costs.Length != n || problem.Constraints.Length != m)
                 {
                     return new Solution(new List<double>(), 0, State.Error, branches);
                 }
@@ -127,17 +173,17 @@ namespace SamplePlugin.Services
                 foreach (var branch in branches)
                 {
                     var coeff = branch.IsPositive ? 1 : -1;
-                    var row = new int[costs.Length];
+                    var row = new int[problem.Costs.Length];
                     row[branch.Index] = coeff;
                     branchConstraints.Add(branch.Value * coeff);
                     branchAssignments.Add([.. row]);
                 }
 
                 // Append branch constraints to create the full constraints array
-                var fullConstraints = constraints.Concat(branchConstraints).ToArray();
+                var fullConstraints = problem.Constraints.Concat(branchConstraints).ToArray();
 
                 // Append branch assignments to create the full assignments array
-                var fullAssignments = assignments.Concat(branchAssignments).ToArray();
+                var fullAssignments = problem.Assignments.Concat(branchAssignments).ToArray();
 
                 // Update m to include branch constraints
                 m = fullConstraints.Length;
@@ -178,7 +224,7 @@ namespace SamplePlugin.Services
                 double[] c_augmented = new double[n + m];
                 for (int j = 0; j < n; j++)
                 {
-                    c_augmented[j] = costs[j];
+                    c_augmented[j] = problem.Costs[j];
                 }
                 // Slack variables have cost 0
 
@@ -393,11 +439,27 @@ namespace SamplePlugin.Services
         }
     }
 
+    public record Problem (int[][] Assignments, double[] Costs, int[] Constraints);
+
     public record Solution (
         List<double> Values,
         double OptimalValue,
         SolverService.State State,
-        List<Branch> Branches);
+        Stack<Branch> Branches)
+    {
+        public void Print(List<ModRecipeWithValue> recipes)
+        {
+            Plugin.Log.Info($"===============================================================================");
+            Plugin.Log.Info($"State: {State}");
+            for (var i = 0; i < recipes.Count; i++)
+            {
+                Plugin.Log.Info($"  Craft [{Values[i]}]: {recipes[i].Item.Name}");
+            }
+
+            Plugin.Log.Info($"Total value: {Math.Floor(OptimalValue)} gil");
+            Plugin.Log.Info($"===============================================================================");
+        }
+    }
 
     public record Branch (int Index, int Value, bool IsPositive);
 }
