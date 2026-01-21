@@ -3,8 +3,8 @@ using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using Lumina.Excel.Sheets;
-using SamplePlugin.Models;
-using SamplePlugin.Services;
+using WachuMakeyMaking.Models;
+using WachuMakeyMaking.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,7 +13,7 @@ using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SamplePlugin.Windows;
+namespace WachuMakeyMaking.Windows;
 
 public class MainWindow : Window, IDisposable
 {
@@ -191,7 +191,10 @@ public class MainWindow : Window, IDisposable
                     // We slight wiggle the costs in order to prefer one over the other in case of a tie
                     var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) + 0.001 * index });
                     // Call the solver service
-                    Task.Run(() => solverService.Solve(recipes.ToList()));
+                    Task.Run(() => solverService.Solve(
+                        recipes.ToList(),
+                        [.. recipeCacheService.GetCrystals(), .. recipeCacheService.GetConsolidatedItems()]
+                        ));
                 }
 
                 if (cachedRecipes.Count > 0)

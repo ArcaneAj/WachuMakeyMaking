@@ -1,5 +1,5 @@
 using Dalamud.Plugin.Services;
-using SamplePlugin.Models;
+using WachuMakeyMaking.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,7 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SamplePlugin.Services;
+namespace WachuMakeyMaking.Services;
 
 public class UniversalisService : IDisposable
 {

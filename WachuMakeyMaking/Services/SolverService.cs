@@ -1,15 +1,14 @@
-using SamplePlugin.Models;
+using WachuMakeyMaking.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SamplePlugin.Services
+namespace WachuMakeyMaking.Services
 {
     public class SolverService
     {
-        private readonly Plugin plugin;
+        private readonly Action<string> log;
         private State state;
-        private RecipeCacheService recipeService;
         private Solution currentBest = null!;
         private double lowerBound = 0.0;
         private List<ModRecipeWithValue> recipes = [];
@@ -23,24 +22,19 @@ namespace SamplePlugin.Services
             Error
         }
 
-        public SolverService(Plugin plugin, RecipeCacheService recipeService)
+        public SolverService(Action<string> log)
         {
-            this.plugin = plugin;
+            this.log = log;
             this.state = State.Idle;
-            this.recipeService = recipeService;
         }
 
         public State CurrentState { get { return this.state; } }
 
-        public Solution Solve(List<ModRecipeWithValue> recipes)
+        public Solution Solve(List<ModRecipeWithValue> recipes, ModItemStack[] resources)
         {
             this.state = State.InProgress;
             this.recipes = recipes;
-            var crystals = this.recipeService.GetCrystals();
-            var items = this.recipeService.GetConsolidatedItems();
-            var resources = crystals.Concat(items).ToArray();
             var usedResources = resources.Where(x => recipes.Any(y => y.Ingredients.ContainsKey(x.Item)));
-
 
             var costs = recipes.Select(x => -x.Value).ToArray();
 
@@ -49,7 +43,7 @@ namespace SamplePlugin.Services
 
             foreach (var resource in usedResources)
             {
-                //Plugin.Log.Info($"{resource.Item.Name}");
+                //this.log($"{resource.Item.Name}");
                 constraintsList.Add(resource.Quantity);
                 var row = recipes.Select(recipe => (int)recipe.Ingredients.GetValueOrDefault(resource.Item));
                 assignmentsList.Add([..row]);
@@ -57,23 +51,23 @@ namespace SamplePlugin.Services
                 var recipesUsingResource = recipes.Where(recipe => recipe.Ingredients.ContainsKey(resource.Item)).ToList();
                 //foreach (var rur in recipesUsingResource)
                 //{
-                //    Plugin.Log.Info($"    {rur.Item.Name}");
+                //    this.log($"    {rur.Item.Name}");
                 //}
             }
 
             var branches = new Stack<Branch>();
             var problem = new Problem(assignmentsList.ToArray(), costs, constraintsList.ToArray());
             var result = Solve(problem, branches);
-            result.Print(recipes);
+            result.Print(recipes, log);
             if (result.State == State.Unbounded)
             {
-                Plugin.Log.Info("Problem is unbounded - no optimal solution exists.");
+                this.log("Problem is unbounded - no optimal solution exists.");
                 this.state = State.Unbounded;
                 return new Solution([], 0, State.Error, []);
             }
             if (result.State != State.Optimal)
             {
-                Plugin.Log.Info("Unknown error occurred when finding initial solution.");
+                this.log("Unknown error occurred when finding initial solution.");
                 this.state = result.State;
                 return new Solution([], 0, State.Error, []);
             }
@@ -83,19 +77,19 @@ namespace SamplePlugin.Services
 
             if (this.currentBest == null)
             {
-                Plugin.Log.Info("Unable to find integral solution");
+                this.log("Unable to find integral solution");
                 return new Solution([], 0, State.Error, []);
             }
 
             if (this.currentBest.State == State.Optimal)
             {
-                Plugin.Log.Info("Optimal solution found:");
-                this.currentBest.Print(recipes);
+                this.log("Optimal solution found:");
+                this.currentBest.Print(recipes, log);
                 this.state = State.Optimal;
             }
             else
             {
-                Plugin.Log.Info("No optimal solution found.");
+                this.log("No optimal solution found.");
                 this.state = State.Error;
             }
 
@@ -105,45 +99,72 @@ namespace SamplePlugin.Services
         private bool BranchAndBound(Problem problem, Solution previousResult)
         {
             var valuesToBranch = previousResult.Values.Select((double val, int index) => (val, index)).Where(x => x.val - Math.Floor(x.val) > 1e-10).ToList();
-            // If we're integral
+
+            // If we're integral, check if this is the best solution so far
             if (valuesToBranch.Count == 0) {
-                // And we're better than the existing solution (or 0 if the existing solution doesn't exist)
                 if (previousResult.OptimalValue < (this.currentBest?.OptimalValue ?? 0.0)){
-                    // This is now the best solution
                     this.currentBest = previousResult;
-                    // Return true if we manage to hit the lower bound
-                    if (Math.Abs(previousResult.OptimalValue - this.lowerBound) > 1e-10) return true;
+                    this.log($"New best integral solution found: {previousResult.OptimalValue}");
+                    previousResult.Print(this.recipes, log);
                 }
-                    
-                Plugin.Log.Info($"CurrentBest {previousResult.OptimalValue}");
-            };
+                return Math.Abs(previousResult.OptimalValue - this.lowerBound) < 1e-10;
+            }
 
-            // For each value to branch, we should create both the upper and lower branches
-            var positiveBranches = valuesToBranch.Select(x => new Branch(x.index, (int)Math.Floor(x.val), true));
-            var negativeBranches = valuesToBranch.Select(x => new Branch(x.index, (int)Math.Ceiling(x.val), false));
+            // Branch on the first fractional variable
+            var branchVar = valuesToBranch[0];
+            var floorVal = (int)Math.Floor(branchVar.val);
+            var ceilVal = (int)Math.Ceiling(branchVar.val);
 
-            foreach (var branch in positiveBranches.Concat(negativeBranches))
+            // Create positive branch: x[index] <= floor(val)
+            var positiveBranch = new Branch(branchVar.index, floorVal, true);
+            var positiveBranches = new Stack<Branch>(previousResult.Branches.Reverse());
+            positiveBranches.Push(positiveBranch);
+
+            this.log($"Branching on variable {branchVar.index}: <= {floorVal}");
+            var positiveResult = Solve(problem, positiveBranches);
+            if (positiveResult.State == State.Optimal)
             {
-                previousResult.Branches.Push(branch);
-                foreach (var item in previousResult.Branches)
+                // Verify the solution satisfies the branch constraint
+                bool feasible = positiveResult.Values[branchVar.index] <= floorVal + 1e-10;
+                if (!feasible)
                 {
-                    Plugin.Log.Info($"Branching on: {item.Index} {item.Value} {item.IsPositive}");
+                    this.log($"Branch constraint violated: x[{branchVar.index}] = {positiveResult.Values[branchVar.index]} > {floorVal}, skipping");
                 }
-
-                var newResult = Solve(problem, previousResult.Branches);
-                newResult.Print(this.recipes);
-
-                // If what we just did is worse than the current best, we can abandon this recursion path
-                if (this.currentBest != null && newResult.OptimalValue > this.currentBest.OptimalValue){
-                    // We remove this branch from the stack
-                    _ = previousResult.Branches.Pop();
-                    // And we try the next branch horizontally
-                    continue;
+                else
+                {
+                    positiveResult.Print(this.recipes, log);
+                    // Only explore further if this could be better than current best
+                    if (this.currentBest == null || positiveResult.OptimalValue < this.currentBest.OptimalValue)
+                    {
+                        BranchAndBound(problem, positiveResult);
+                    }
                 }
-                
-                var boundHit = BranchAndBound(problem, newResult);
-                if (boundHit) return true;
-                _ = previousResult.Branches.Pop();
+            }
+
+            // Create negative branch: x[index] >= ceil(val)
+            var negativeBranch = new Branch(branchVar.index, ceilVal, false);
+            var negativeBranches = new Stack<Branch>(previousResult.Branches.Reverse());
+            negativeBranches.Push(negativeBranch);
+
+            this.log($"Branching on variable {branchVar.index}: >= {ceilVal}");
+            var negativeResult = Solve(problem, negativeBranches);
+            if (negativeResult.State == State.Optimal)
+            {
+                // Verify the solution satisfies the branch constraint
+                bool feasible = negativeResult.Values[branchVar.index] >= ceilVal - 1e-10;
+                if (!feasible)
+                {
+                    this.log($"Branch constraint violated: x[{branchVar.index}] = {negativeResult.Values[branchVar.index]} < {ceilVal}, skipping");
+                }
+                else
+                {
+                    negativeResult.Print(this.recipes, log);
+                    // Only explore further if this could be better than current best
+                    if (this.currentBest == null || negativeResult.OptimalValue < this.currentBest.OptimalValue)
+                    {
+                        BranchAndBound(problem, negativeResult);
+                    }
+                }
             }
 
             return false;
@@ -447,17 +468,41 @@ namespace SamplePlugin.Services
         SolverService.State State,
         Stack<Branch> Branches)
     {
-        public void Print(List<ModRecipeWithValue> recipes)
+        public virtual bool Equals(Solution? other)
         {
-            Plugin.Log.Info($"===============================================================================");
-            Plugin.Log.Info($"State: {State}");
+            if (other is null) return false;
+            if (ReferenceEquals(this, other)) return true;
+
+            return State == other.State &&
+                   Math.Abs(OptimalValue - other.OptimalValue) < 1e-10 &&
+                   Values.SequenceEqual(other.Values) &&
+                   Branches.SequenceEqual(other.Branches);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int hash = 17;
+                hash = hash * 23 + State.GetHashCode();
+                hash = hash * 23 + OptimalValue.GetHashCode();
+                hash = hash * 23 + Values.GetHashCode();
+                hash = hash * 23 + Branches.GetHashCode();
+                return hash;
+            }
+        }
+
+        public void Print(List<ModRecipeWithValue> recipes, Action<string> log)
+        {
+            log($"===============================================================================");
+            log($"State: {State}");
             for (var i = 0; i < recipes.Count; i++)
             {
-                Plugin.Log.Info($"  Craft [{Values[i]}]: {recipes[i].Item.Name}");
+                log($"  Craft [{Values[i]}]: {recipes[i].Item.Name}");
             }
 
-            Plugin.Log.Info($"Total value: {Math.Floor(OptimalValue)} gil");
-            Plugin.Log.Info($"===============================================================================");
+            log($"Total value: {Math.Floor(OptimalValue)} gil");
+            log($"===============================================================================");
         }
     }
 

@@ -1,15 +1,12 @@
 using Dalamud.Game.Command;
-using Dalamud.Game.Inventory;
 using Dalamud.IoC;
 using Dalamud.Plugin;
-using System.IO;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
-using SamplePlugin.Windows;
-using SamplePlugin.Services;
-using FFXIVClientStructs.FFXIV.Client.Game;
+using WachuMakeyMaking.Windows;
+using WachuMakeyMaking.Services;
 
-namespace SamplePlugin;
+namespace WachuMakeyMaking;
 
 public sealed class Plugin : IDalamudPlugin
 {
@@ -42,7 +39,7 @@ public sealed class Plugin : IDalamudPlugin
         UniversalisService = new UniversalisService(this);
         CollectableService = new CollectableService(this);
         RecipeCacheService = new RecipeCacheService(this, UniversalisService, CollectableService);
-        SolverService = new SolverService(this, RecipeCacheService);
+        SolverService = new SolverService((string l) => Log.Info(l));
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this, RecipeCacheService, SolverService);
 

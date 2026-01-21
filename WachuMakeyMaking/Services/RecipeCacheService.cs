@@ -1,14 +1,15 @@
 using Dalamud.Game.Inventory;
 using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Lumina.Excel.Sheets;
-using SamplePlugin.Models;
+using WachuMakeyMaking.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using WachuMakeyMaking.Utils;
 
-namespace SamplePlugin.Services;
+namespace WachuMakeyMaking.Services;
 
 public class RecipeCacheService : IDisposable
 {
@@ -86,7 +87,7 @@ public class RecipeCacheService : IDisposable
             var crystals = await Task.Run(GetCrystals);
 
             var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
-            var gil = itemSheet.GetRow(1);
+            var gil = itemSheet.GetRow(1).ToMod();
 
             // Create inventory count lookup (items + crystals)
             var inventoryCounts = consolidatedItems.ToDictionary(
@@ -246,7 +247,7 @@ public class RecipeCacheService : IDisposable
                 continue;
             }
 
-            items.Add(new ModItemStack(itemRow, item.BaseItemId, item.Quantity));
+            items.Add(new ModItemStack(itemRow.ToMod(), item.BaseItemId, item.Quantity));
         }
 
         return items;
@@ -255,7 +256,7 @@ public class RecipeCacheService : IDisposable
     private ModRecipe GetRecipeIngredients(Recipe recipe)
     {
         var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
-        var ingredientsDict = new Dictionary<Item, byte>();
+        var ingredientsDict = new Dictionary<ModItem, byte>();
 
         try
         {
@@ -274,7 +275,7 @@ public class RecipeCacheService : IDisposable
                     // Get the actual Item object from the Excel sheet
                     if (itemSheet.TryGetRow(ingredientRef.RowId, out var item))
                     {
-                        ingredientsDict[item] = amount;
+                        ingredientsDict[item.ToMod()] = amount;
                     }
                 }
             }
@@ -285,7 +286,7 @@ public class RecipeCacheService : IDisposable
             Plugin.Log.Error($"Error getting recipe ingredients: {ex.Message}");
         }
 
-        return new ModRecipe(recipe.ItemResult.Value, ingredientsDict);
+        return new ModRecipe(recipe.ItemResult.Value.ToMod(), ingredientsDict);
     }
 
     private bool CanCraftRecipe(ModRecipe recipe, Dictionary<uint, int> inventoryCounts)
@@ -311,7 +312,7 @@ public class RecipeCacheService : IDisposable
         return true; // Have enough of all ingredients
     }
 
-    private List<ModRecipe> FindRecipesWithIngredient(Item item)
+    private List<ModRecipe> FindRecipesWithIngredient(ModItem item)
     {
         var recipeSheet = Plugin.DataManager.GetExcelSheet<Recipe>();
 
