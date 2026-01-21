@@ -1,10 +1,9 @@
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.Inventory;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using Lumina.Excel.Sheets;
-using WachuMakeyMaking.Models;
-using WachuMakeyMaking.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,6 +11,9 @@ using System.Linq;
 using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
+using WachuMakeyMaking.Models;
+using WachuMakeyMaking.Services;
+using WachuMakeyMaking.Utils;
 
 namespace WachuMakeyMaking.Windows;
 
@@ -31,7 +33,13 @@ public class MainWindow : Window, IDisposable
 
     // Track manual recipe value overrides (keyed by recipe key)
     // null means use calculated value, non-null means use this override
-    private Dictionary<string, int?> recipeValueOverrides = new();
+    private Dictionary<string, int> recipeValueOverrides = new();
+
+    private Dictionary<uint, int> resourceQuantityOverrides = new();
+
+    private Dictionary<uint, bool> resourceSelections = new();
+
+    private readonly HashSet<ModItem> allIngredients = new();
 
 
     // We give this window a hidden ID using ##.
@@ -49,6 +57,8 @@ public class MainWindow : Window, IDisposable
         this.plugin = plugin;
         this.recipeCacheService = recipeCacheService;
         this.solverService = solverService;
+
+        allIngredients = [.. recipeCacheService.FindRecipes().SelectMany(x => x.Ingredients.Keys)];
 
         if (false)
         {
@@ -111,16 +121,114 @@ public class MainWindow : Window, IDisposable
             plugin.ToggleConfigUi();
         }
 
+        // Initialize cache if needed
+        _ = recipeCacheService.EnsureCacheInitializedAsync();
+
+        // Create tabs
+        using (var tabBar = ImRaii.TabBar("MainTabs"))
+        {
+            if (tabBar.Success)
+            {
+                // Tab 1: Resources/Inventory
+                using (var tab = ImRaii.TabItem("Resources"))
+                {
+                    if (tab.Success)
+                    {
+                        DrawResourcesTab();
+                    }
+                }
+
+                // Tab 2: Recipes (current content)
+                using (var tab = ImRaii.TabItem("Recipes"))
+                {
+                    if (tab.Success)
+                    {
+                        DrawRecipesTab();
+                    }
+                }
+
+                // Tab 3: Results
+                using (var tab = ImRaii.TabItem("Results"))
+                {
+                    if (tab.Success)
+                    {
+                        ImGui.Text("Results tab - coming soon!");
+                    }
+                }
+            }
+        }
+    }
+
+    private void DrawResourcesTab()
+    {
+        // Get actual inventory quantities before overrides
+        var actualCrystals = recipeCacheService.GetCrystals();
+        var actualItems = recipeCacheService.GetConsolidatedItems();
+        // Combine cached and manual resources for display
+        var allDisplayResources = actualItems.Concat(actualCrystals).Where(x => allIngredients.Contains(x.Item)).ToArray();
+        var inventoryDict = allDisplayResources.ToDictionary(x => x.Item, x => x);
+
+        ImGui.Text($"Available Resources: {allDisplayResources.Length}");
+
         ImGui.SameLine();
-        if (ImGui.Button("Force Refresh"))
+        if (ImGui.Button("Submit"))
         {
             recipeCacheService.ForceRefresh();
             ResetRecipeSelections();
         }
 
-        // Initialize cache if needed
-        _ = recipeCacheService.EnsureCacheInitializedAsync();
+        // Column headers
+        ImGui.Text("Quantity");
+        ImGui.SameLine(110.0f); // Position after the fixed-width textbox
+        ImGui.Text("Resource");
+        ImGui.Separator();
 
+        // Normally a BeginChild() would have to be followed by an unconditional EndChild(),
+        // ImRaii takes care of this after the scope ends.
+        // This works for all ImGui functions that require specific handling, examples are BeginTable() or Indent().
+        using (var child = ImRaii.Child("ResourcesChildWithAScrollbar", Vector2.Zero, true))
+        {
+            // Check if this child is drawing
+            if (child.Success)
+            {
+
+                foreach (var resourceItem in allDisplayResources.OrderBy(r => r.Item.Name.ToString()))
+                {
+                    var resourceId = resourceItem.Id;
+                    var isSelected = resourceSelections.GetValueOrDefault(resourceId, true);
+
+                    var quantity = GetResourceQuantity(resourceItem);
+
+                    // Editable quantity textbox (fixed width)
+                    ImGui.SetNextItemWidth(55.0f); // Fixed width for the textbox
+                    if (ImGui.InputInt($"##quantity_{resourceId}", ref quantity))
+                    {
+                        // Clamp to valid range (0 to 999999)
+                        resourceQuantityOverrides[resourceId] = Math.Min(Math.Max(quantity, 0), 999999);
+                    }
+
+                    ImGui.SameLine();
+
+                    // Checkbox
+                    if (ImGui.Checkbox($"##{resourceId}", ref isSelected))
+                    {
+                        resourceSelections[resourceId] = isSelected;
+                    }
+
+                    ImGui.SameLine();
+                    var displayName = resourceItem.Item.Name;
+                    if (inventoryDict.TryGetValue(resourceItem.Item, out var originalItemStack))
+                    {
+                        displayName += $" ({originalItemStack.Quantity} available)";
+                    }
+                    ImGui.Text(displayName);
+                }
+            }
+        }
+    }
+
+    private void DrawRecipesTab()
+    {
         // Normally a BeginChild() would have to be followed by an unconditional EndChild(),
         // ImRaii takes care of this after the scope ends.
         // This works for all ImGui functions that require specific handling, examples are BeginTable() or Indent().
@@ -192,7 +300,7 @@ public class MainWindow : Window, IDisposable
                     ImGuiHelpers.ScaledDummy(10.0f);
 
                     var currencyGrouping = cachedRecipes.GroupBy(x => x.Currency.RowId).Where(x => x.Key != 1);
-                    
+
                     // Clean up currency values for currencies that are no longer present
                     var currentCurrencyIds = new HashSet<uint>(currencyGrouping.Select(g => g.Key));
                     var currencyIdsToRemove = currencyValues.Keys.Where(id => !currentCurrencyIds.Contains(id)).ToList();
@@ -206,7 +314,7 @@ public class MainWindow : Window, IDisposable
                     {
                         var currencyId = currencyGroup.Key;
                         var currency = currencyGroup.First().Currency;
-                        
+
                         // Initialize currency value if not present
                         if (!currencyValues.ContainsKey(currencyId))
                         {
@@ -261,6 +369,12 @@ public class MainWindow : Window, IDisposable
         }
     }
 
+    private int GetResourceQuantity(ModItemStack resourceItem)
+    {
+        if (resourceQuantityOverrides.TryGetValue(resourceItem.Id, out var quantity)) return quantity;
+        return resourceItem.Quantity;
+    }
+
     private int GetRecipeValue(ModRecipeWithValue recipe)
     {
         var recipeKey = recipe.Item.Name.ToString();
@@ -271,8 +385,8 @@ public class MainWindow : Window, IDisposable
         var calculatedValue = Math.Min((int)Math.Floor(recipe.Value * currencyMultiplier), 999999);
 
         // Return manual override if exists, otherwise calculated value
-        var hasOverride = recipeValueOverrides.TryGetValue(recipeKey, out var overrideValue);
-        return hasOverride ? Math.Min(overrideValue ?? calculatedValue, 999999) : calculatedValue;
+        if(recipeValueOverrides.TryGetValue(recipeKey, out var overrideValue)) return Math.Min(overrideValue, 999999);
+        return calculatedValue;
     }
 
 }

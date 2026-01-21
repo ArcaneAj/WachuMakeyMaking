@@ -47,8 +47,11 @@ public class RecipeCacheService : IDisposable
 
     public List<ModRecipeWithValue> CachedRecipes => cachedRecipes;
 
+    private CancellationTokenSource cancellationTokenSource = new();
+
     public void ForceRefresh()
     {
+        cancellationTokenSource.Cancel();
         cachedRecipes.Clear();
         isCacheInitializing = false;
         CurrentProcessingStep = string.Empty;
@@ -60,8 +63,10 @@ public class RecipeCacheService : IDisposable
     {
         if (cachedRecipes.Count == 0 && !isCacheInitializing)
         {
+            cancellationTokenSource = new CancellationTokenSource();
+            var cancellationToken = cancellationTokenSource.Token;
             isCacheInitializing = true;
-            await InitializeRecipeCacheAsync();
+            await InitializeRecipeCacheAsync(cancellationToken);
         }
     }
 
@@ -75,7 +80,7 @@ public class RecipeCacheService : IDisposable
         TotalProgress = 0;
     }
 
-    private async Task InitializeRecipeCacheAsync()
+    private async Task InitializeRecipeCacheAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -83,8 +88,9 @@ public class RecipeCacheService : IDisposable
             CurrentProgress = 0;
 
             // Get consolidated item stacks and crystals
-            var consolidatedItems = await Task.Run(GetConsolidatedItems);
-            var crystals = await Task.Run(GetCrystals);
+            var consolidatedItems = await Task.Run(GetConsolidatedItems, cancellationToken);
+            var crystals = await Task.Run(GetCrystals, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
 
             var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
             var gil = itemSheet.GetRow(1).ToMod();
@@ -109,6 +115,7 @@ public class RecipeCacheService : IDisposable
 
             for (int i = 0; i < consolidatedItems.Count; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var item = consolidatedItems[i];
                 var recipes = await Task.Run(() => FindRecipesWithIngredient(item.Item));
                 allRecipesWithInventoryIngredients.AddRange(recipes);
@@ -128,8 +135,12 @@ public class RecipeCacheService : IDisposable
             CurrentProcessingStep = "Fetching market prices...";
 
             // Create cancellation token with 10-second timeout
-            using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var cancellationToken = cancellationTokenSource.Token;
+            using var timedCancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var timedCancellationToken = timedCancellationTokenSource.Token;
+
+            // And combine it with our task level cancellation
+            using var apiCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(timedCancellationToken, cancellationToken);
+            var apiCancellationToken = apiCancellationTokenSource.Token;
 
             var itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList();
             var recipesWithValues = new List<ModRecipeWithValue>();
@@ -138,7 +149,7 @@ public class RecipeCacheService : IDisposable
 
             try
             {
-                var marketData = await universalisService.GetMarketDataAsync(itemsWithoutValue, cancellationToken);
+                var marketData = await universalisService.GetMarketDataAsync(itemsWithoutValue, apiCancellationToken);
 
                 foreach (var marketItem in marketData.results ?? [])
                 {
@@ -167,8 +178,11 @@ public class RecipeCacheService : IDisposable
             }
             catch (OperationCanceledException)
             {
-                Plugin.Log.Warning("Universalis API request timed out after 10 seconds");
-                itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList(); // All items failed due to timeout
+                if (timedCancellationToken.IsCancellationRequested)
+                {
+                    Plugin.Log.Warning("Universalis API request timed out after 10 seconds");
+                    itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList(); // All items failed due to timeout
+                }
             }
             catch (Exception ex)
             {
@@ -314,8 +328,12 @@ public class RecipeCacheService : IDisposable
 
     private List<ModRecipe> FindRecipesWithIngredient(ModItem item)
     {
-        var recipeSheet = Plugin.DataManager.GetExcelSheet<Recipe>();
 
-        return recipeSheet.Select(GetRecipeIngredients).Where(x => x.Ingredients.ContainsKey(item)).ToList();
+        return FindRecipes().Where(x => x.Ingredients.ContainsKey(item)).ToList();
+    }
+
+    public IEnumerable<ModRecipe> FindRecipes()
+    {
+        return Plugin.DataManager.GetExcelSheet<Recipe>().Select(GetRecipeIngredients);
     }
 }

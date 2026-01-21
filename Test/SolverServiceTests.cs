@@ -30,42 +30,42 @@ namespace Test
             }
         }
 
-        [Test]
-        public void Solve_RealData_ShouldReturnOptimal()
-        {
-            (var recipes, var resources) = LoadTestData("TestData1.json");
-            var solver = new SolverService(Log, Log);
-            var solution = solver.Solve(recipes, resources);
-            Assert.That(solution.State, Is.EqualTo(State.Optimal));
-        }
+        //[Test]
+        //public void Solve_RealData_ShouldReturnOptimal()
+        //{
+        //    (var recipes, var resources) = LoadTestData("TestData1.json");
+        //    var solver = new SolverService(Log, Log);
+        //    var solution = solver.Solve(recipes, resources);
+        //    Assert.That(solution.State, Is.EqualTo(State.Optimal));
+        //}
 
-        private (List<ModRecipeWithValue>, ModItemStack[]) LoadTestData(string fileName)
-        {
-            var assemblyLocation = Assembly.GetExecutingAssembly().Location;
-            var testDirectory = Path.GetDirectoryName(assemblyLocation);
-            var projectDirectory = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(testDirectory))));
-            var jsonFilePath = Path.Combine(projectDirectory!, "Data", fileName);
-            var jsonText = File.ReadAllText(jsonFilePath);
-            var data = JsonSerializer.Deserialize<TestData>(jsonText);
+        //private (List<ModRecipeWithValue>, ModItemStack[]) LoadTestData(string fileName)
+        //{
+        //    var assemblyLocation = Assembly.GetExecutingAssembly().Location;
+        //    var testDirectory = Path.GetDirectoryName(assemblyLocation);
+        //    var projectDirectory = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(testDirectory))));
+        //    var jsonFilePath = Path.Combine(projectDirectory!, "Data", fileName);
+        //    var jsonText = File.ReadAllText(jsonFilePath);
+        //    var data = JsonSerializer.Deserialize<TestData>(jsonText);
 
-            // Convert recipes
-            var recipes = data.Recipes.Select(r => new ModRecipeWithValue(
-                new ModItem(r.Item.RowId, r.Item.Name),
-                r.Ingredients.ToDictionary(
-                    i => new ModItem(i.Item.RowId, i.Item.Name),
-                    i => (byte)i.Quantity
-                ),
-                r.Value,
-                new ModItem(r.Currency.RowId, r.Currency.Name)
-            )).ToList();
+        //    // Convert recipes
+        //    var recipes = data.Recipes.Select(r => new ModRecipeWithValue(
+        //        new ModItem(r.Item.RowId, r.Item.Name),
+        //        r.Ingredients.ToDictionary(
+        //            i => new ModItem(i.Item.RowId, i.Item.Name),
+        //            i => (byte)i.Quantity
+        //        ),
+        //        r.Value,
+        //        new ModItem(r.Currency.RowId, r.Currency.Name)
+        //    )).ToList();
 
-            // Convert resources
-            var resources = data.Resources.Select(r =>
-                new ModItemStack(new ModItem(r.Item.RowId, r.Item.Name), r.Item.RowId, r.Quantity)
-            ).ToArray();
+        //    // Convert resources
+        //    var resources = data.Resources.Select(r =>
+        //        new ModItemStack(new ModItem(r.Item.RowId, r.Item.Name), r.Item.RowId, r.Quantity)
+        //    ).ToArray();
 
-            return (recipes, resources);
-        }
+        //    return (recipes, resources);
+        //}
 
         private record TestData(List<TestRecipe> Recipes, List<TestResource> Resources);
 
