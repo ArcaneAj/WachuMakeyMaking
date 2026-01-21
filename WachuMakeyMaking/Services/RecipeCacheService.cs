@@ -11,7 +11,7 @@ using WachuMakeyMaking.Utils;
 
 namespace WachuMakeyMaking.Services;
 
-public class RecipeCacheService : IDisposable
+public class RecipeCacheService
 {
     private readonly Plugin plugin;
     private readonly UniversalisService universalisService;
@@ -27,14 +27,6 @@ public class RecipeCacheService : IDisposable
         this.universalisService = universalisService;
         this.collectableService = collectableService;
 
-        // Subscribe to inventory changes
-        Plugin.GameInventory.InventoryChanged += OnInventoryChanged;
-    }
-
-    public void Dispose()
-    {
-        // Unsubscribe from inventory changes
-        Plugin.GameInventory.InventoryChanged -= OnInventoryChanged;
     }
 
     public bool IsCacheInitializing => isCacheInitializing;
@@ -48,9 +40,14 @@ public class RecipeCacheService : IDisposable
     public List<ModRecipeWithValue> CachedRecipes => cachedRecipes;
 
     private CancellationTokenSource cancellationTokenSource = new();
+    private ModItemStack[] items;
+    private ModItemStack[] crystals;
 
-    public void ForceRefresh()
+    public void ForceRefresh(ModItemStack[] modItemStacks)
     {
+        var crystalIds = GetCrystals().Select(x => x.Id).ToArray();
+        items = [..modItemStacks.Where(x => !crystalIds.Contains(x.Id))];
+        crystals = [.. modItemStacks.Where(x => crystalIds.Contains(x.Id))];
         cancellationTokenSource.Cancel();
         cachedRecipes.Clear();
         isCacheInitializing = false;
@@ -70,16 +67,6 @@ public class RecipeCacheService : IDisposable
         }
     }
 
-    private void OnInventoryChanged(IReadOnlyCollection<InventoryEventArgs> events)
-    {
-        // Clear cache when inventory changes - it will be rebuilt on next access
-        cachedRecipes.Clear();
-        isCacheInitializing = false; // Reset flag so new cache can be built
-        CurrentProcessingStep = string.Empty;
-        CurrentProgress = 0;
-        TotalProgress = 0;
-    }
-
     private async Task InitializeRecipeCacheAsync(CancellationToken cancellationToken)
     {
         try
@@ -88,15 +75,12 @@ public class RecipeCacheService : IDisposable
             CurrentProgress = 0;
 
             // Get consolidated item stacks and crystals
-            var consolidatedItems = await Task.Run(GetConsolidatedItems, cancellationToken);
-            var crystals = await Task.Run(GetCrystals, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
 
             var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
             var gil = itemSheet.GetRow(1).ToMod();
 
             // Create inventory count lookup (items + crystals)
-            var inventoryCounts = consolidatedItems.ToDictionary(
+            var inventoryCounts = items.ToDictionary(
                 stack => stack.Id,
                 stack => stack.Quantity
             );
@@ -107,21 +91,21 @@ public class RecipeCacheService : IDisposable
             }
 
             // Set total progress to the number of consolidated items to process
-            TotalProgress = consolidatedItems.Count;
-            CurrentProcessingStep = $"Finding recipes... (0/{consolidatedItems.Count} items)";
+            TotalProgress = items.Length;
+            CurrentProcessingStep = $"Finding recipes... (0/{items.Length} items)";
 
             // Find all recipes that use at least one ingredient from inventory
             var allRecipesWithInventoryIngredients = new List<ModRecipe>();
 
-            for (int i = 0; i < consolidatedItems.Count; i++)
+            for (int i = 0; i < items.Length; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var item = consolidatedItems[i];
+                var item = items[i];
                 var recipes = await Task.Run(() => FindRecipesWithIngredient(item.Item));
                 allRecipesWithInventoryIngredients.AddRange(recipes);
 
                 CurrentProgress = i + 1;
-                CurrentProcessingStep = $"Finding recipes... ({CurrentProgress}/{consolidatedItems.Count} items)";
+                CurrentProcessingStep = $"Finding recipes... ({CurrentProgress}/{items.Length} items)";
             }
 
             // Filter to only recipes that are entirely satisfiable, and remove duplicates by result item name

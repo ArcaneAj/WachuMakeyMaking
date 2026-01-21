@@ -74,7 +74,6 @@ public sealed class Plugin : IDalamudPlugin
         ConfigWindow.Dispose();
         MainWindow.Dispose();
         UniversalisService.Dispose();
-        RecipeCacheService.Dispose();
         // SolverService doesn't implement IDisposable, so no need to dispose
 
         CommandManager.RemoveHandler(CommandName);

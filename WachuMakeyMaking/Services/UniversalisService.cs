@@ -37,6 +37,8 @@ public class UniversalisService : IDisposable
 
         var ids = string.Join(',', itemIds);
 
+        if (string.IsNullOrEmpty(ids)) return new AggregatedMarketBoardResult();
+
         try
         {
             using var result = await httpClient.GetAsync($"https://universalis.app/api/v2/aggregated/{homeWorldId}/{ids}", cancellationToken);

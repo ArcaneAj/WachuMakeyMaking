@@ -1,5 +1,6 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Inventory;
+using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
@@ -13,8 +14,6 @@ using System.Text;
 using System.Threading.Tasks;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
-using WachuMakeyMaking.Utils;
-
 namespace WachuMakeyMaking.Windows;
 
 public class MainWindow : Window, IDisposable
@@ -26,27 +25,27 @@ public class MainWindow : Window, IDisposable
     private static readonly bool CheckedDefault = false;
 
     // Track which recipes are selected (checked)
-    private Dictionary<string, bool> recipeSelections = new();
+    private Dictionary<string, bool> recipeSelections = [];
 
     // Track currency values (keyed by currency RowId)
-    private Dictionary<uint, float> currencyValues = new();
+    private Dictionary<uint, float> currencyValues = [];
 
     // Track manual recipe value overrides (keyed by recipe key)
     // null means use calculated value, non-null means use this override
-    private Dictionary<string, int> recipeValueOverrides = new();
+    private Dictionary<string, int> recipeValueOverrides = [];
 
-    private Dictionary<uint, int> resourceQuantityOverrides = new();
+    private Dictionary<uint, int> resourceQuantityOverrides = [];
 
-    private Dictionary<uint, bool> resourceSelections = new();
+    private Dictionary<uint, bool> resourceSelections = [];
 
-    private readonly HashSet<ModItem> allIngredients = new();
+    private readonly HashSet<ModItem> allIngredients = [];
 
+    private ModItemStack[] allDisplayResources = null!;
 
-    // We give this window a hidden ID using ##.
-    // The user will see "My Amazing Window" as window title,
-    // but for ImGui the ID is "My Amazing Window##With a hidden ID"
+    private Dictionary<ModItem, ModItemStack> inventoryDict = null!;
+
     public MainWindow(Plugin plugin, RecipeCacheService recipeCacheService, SolverService solverService)
-        : base("My Amazing Window##With a hidden ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
+        : base($"{Plugin.Name}##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
         SizeConstraints = new WindowSizeConstraints
         {
@@ -57,6 +56,9 @@ public class MainWindow : Window, IDisposable
         this.plugin = plugin;
         this.recipeCacheService = recipeCacheService;
         this.solverService = solverService;
+
+        // Subscribe to inventory changes
+        Plugin.GameInventory.InventoryChanged += OnInventoryChanged;
 
         allIngredients = [.. recipeCacheService.FindRecipes().SelectMany(x => x.Ingredients.Keys)];
 
@@ -106,7 +108,19 @@ public class MainWindow : Window, IDisposable
 
     public void Dispose()
     {
-        // Service disposal is handled by the plugin
+        // Unsubscribe from inventory changes
+        Plugin.GameInventory.InventoryChanged -= OnInventoryChanged;
+    }
+
+    private void OnInventoryChanged(IReadOnlyCollection<InventoryEventArgs> events)
+    {
+        // Get actual inventory quantities before overrides
+        var actualCrystals = recipeCacheService.GetCrystals();
+        var actualItems = recipeCacheService.GetConsolidatedItems();
+        // Combine cached and manual resources for display
+        allDisplayResources = [.. actualItems.Concat(actualCrystals).Where(x => allIngredients.Contains(x.Item))];
+        inventoryDict = allDisplayResources.ToDictionary(x => x.Item, x => x);
+        recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
     }
 
     private void ResetRecipeSelections()
@@ -116,6 +130,12 @@ public class MainWindow : Window, IDisposable
 
     public override void Draw()
     {
+        if (allDisplayResources == null || inventoryDict == null) {
+            allDisplayResources = [];
+            inventoryDict = [];
+            OnInventoryChanged([]);
+        }
+
         if (ImGui.Button("Show Settings"))
         {
             plugin.ToggleConfigUi();
@@ -161,19 +181,12 @@ public class MainWindow : Window, IDisposable
 
     private void DrawResourcesTab()
     {
-        // Get actual inventory quantities before overrides
-        var actualCrystals = recipeCacheService.GetCrystals();
-        var actualItems = recipeCacheService.GetConsolidatedItems();
-        // Combine cached and manual resources for display
-        var allDisplayResources = actualItems.Concat(actualCrystals).Where(x => allIngredients.Contains(x.Item)).ToArray();
-        var inventoryDict = allDisplayResources.ToDictionary(x => x.Item, x => x);
-
         ImGui.Text($"Available Resources: {allDisplayResources.Length}");
 
         ImGui.SameLine();
         if (ImGui.Button("Submit"))
         {
-            recipeCacheService.ForceRefresh();
+            recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
             ResetRecipeSelections();
         }
 
@@ -225,6 +238,21 @@ public class MainWindow : Window, IDisposable
                 }
             }
         }
+    }
+
+    private ModItemStack[] ApplyOverrides(ModItemStack[] allDisplayResources)
+    {
+        var updated = new List<ModItemStack>();
+        foreach (var resourceItem in allDisplayResources)
+        {
+            var quantity = GetResourceQuantity(resourceItem);
+            if (!resourceSelections.TryGetValue(resourceItem.Id, out var selected) || selected)
+            {
+                updated.Add(new ModItemStack(resourceItem.Item, resourceItem.Id, quantity));
+            }
+        }
+
+        return [.. updated];
     }
 
     private void DrawRecipesTab()
@@ -291,7 +319,7 @@ public class MainWindow : Window, IDisposable
                     // Call the solver service
                     Task.Run(() => solverService.Solve(
                         recipes.ToList(),
-                        [.. recipeCacheService.GetCrystals(), .. recipeCacheService.GetConsolidatedItems()]
+                        ApplyOverrides(allDisplayResources)
                         ));
                 }
 
