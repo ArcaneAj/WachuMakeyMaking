@@ -1,16 +1,17 @@
 using Dalamud.Game.Inventory;
 using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Lumina.Excel.Sheets;
-using SamplePlugin.Models;
+using WachuMakeyMaking.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using WachuMakeyMaking.Utils;
 
-namespace SamplePlugin.Services;
+namespace WachuMakeyMaking.Services;
 
-public class RecipeCacheService : IDisposable
+public class RecipeCacheService
 {
     private readonly Plugin plugin;
     private readonly UniversalisService universalisService;
@@ -26,14 +27,6 @@ public class RecipeCacheService : IDisposable
         this.universalisService = universalisService;
         this.collectableService = collectableService;
 
-        // Subscribe to inventory changes
-        Plugin.GameInventory.InventoryChanged += OnInventoryChanged;
-    }
-
-    public void Dispose()
-    {
-        // Unsubscribe from inventory changes
-        Plugin.GameInventory.InventoryChanged -= OnInventoryChanged;
     }
 
     public bool IsCacheInitializing => isCacheInitializing;
@@ -46,8 +39,16 @@ public class RecipeCacheService : IDisposable
 
     public List<ModRecipeWithValue> CachedRecipes => cachedRecipes;
 
-    public void ForceRefresh()
+    private CancellationTokenSource cancellationTokenSource = new();
+    private ModItemStack[] items = [];
+    private ModItemStack[] crystals = [];
+
+    public void ForceRefresh(ModItemStack[] modItemStacks)
     {
+        var crystalIds = GetCrystals().Select(x => x.Id).ToArray();
+        items = [..modItemStacks.Where(x => !crystalIds.Contains(x.Id))];
+        crystals = [.. modItemStacks.Where(x => crystalIds.Contains(x.Id))];
+        cancellationTokenSource.Cancel();
         cachedRecipes.Clear();
         isCacheInitializing = false;
         CurrentProcessingStep = string.Empty;
@@ -59,22 +60,14 @@ public class RecipeCacheService : IDisposable
     {
         if (cachedRecipes.Count == 0 && !isCacheInitializing)
         {
+            cancellationTokenSource = new CancellationTokenSource();
+            var cancellationToken = cancellationTokenSource.Token;
             isCacheInitializing = true;
-            await InitializeRecipeCacheAsync();
+            await InitializeRecipeCacheAsync(cancellationToken);
         }
     }
 
-    private void OnInventoryChanged(IReadOnlyCollection<InventoryEventArgs> events)
-    {
-        // Clear cache when inventory changes - it will be rebuilt on next access
-        cachedRecipes.Clear();
-        isCacheInitializing = false; // Reset flag so new cache can be built
-        CurrentProcessingStep = string.Empty;
-        CurrentProgress = 0;
-        TotalProgress = 0;
-    }
-
-    private async Task InitializeRecipeCacheAsync()
+    private async Task InitializeRecipeCacheAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -82,14 +75,12 @@ public class RecipeCacheService : IDisposable
             CurrentProgress = 0;
 
             // Get consolidated item stacks and crystals
-            var consolidatedItems = await Task.Run(GetConsolidatedItems);
-            var crystals = await Task.Run(GetCrystals);
 
             var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
-            var gil = itemSheet.GetRow(1);
+            var gil = itemSheet.GetRow(1).ToMod();
 
             // Create inventory count lookup (items + crystals)
-            var inventoryCounts = consolidatedItems.ToDictionary(
+            var inventoryCounts = items.ToDictionary(
                 stack => stack.Id,
                 stack => stack.Quantity
             );
@@ -100,20 +91,21 @@ public class RecipeCacheService : IDisposable
             }
 
             // Set total progress to the number of consolidated items to process
-            TotalProgress = consolidatedItems.Count;
-            CurrentProcessingStep = $"Finding recipes... (0/{consolidatedItems.Count} items)";
+            TotalProgress = items.Length;
+            CurrentProcessingStep = $"Finding recipes... (0/{items.Length} items)";
 
             // Find all recipes that use at least one ingredient from inventory
             var allRecipesWithInventoryIngredients = new List<ModRecipe>();
 
-            for (int i = 0; i < consolidatedItems.Count; i++)
+            for (int i = 0; i < items.Length; i++)
             {
-                var item = consolidatedItems[i];
+                cancellationToken.ThrowIfCancellationRequested();
+                var item = items[i];
                 var recipes = await Task.Run(() => FindRecipesWithIngredient(item.Item));
                 allRecipesWithInventoryIngredients.AddRange(recipes);
 
                 CurrentProgress = i + 1;
-                CurrentProcessingStep = $"Finding recipes... ({CurrentProgress}/{consolidatedItems.Count} items)";
+                CurrentProcessingStep = $"Finding recipes... ({CurrentProgress}/{items.Length} items)";
             }
 
             // Filter to only recipes that are entirely satisfiable, and remove duplicates by result item name
@@ -127,8 +119,12 @@ public class RecipeCacheService : IDisposable
             CurrentProcessingStep = "Fetching market prices...";
 
             // Create cancellation token with 10-second timeout
-            using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var cancellationToken = cancellationTokenSource.Token;
+            using var timedCancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var timedCancellationToken = timedCancellationTokenSource.Token;
+
+            // And combine it with our task level cancellation
+            using var apiCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(timedCancellationToken, cancellationToken);
+            var apiCancellationToken = apiCancellationTokenSource.Token;
 
             var itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList();
             var recipesWithValues = new List<ModRecipeWithValue>();
@@ -137,7 +133,7 @@ public class RecipeCacheService : IDisposable
 
             try
             {
-                var marketData = await universalisService.GetMarketDataAsync(itemsWithoutValue, cancellationToken);
+                var marketData = await universalisService.GetMarketDataAsync(itemsWithoutValue, apiCancellationToken);
 
                 foreach (var marketItem in marketData.results ?? [])
                 {
@@ -166,8 +162,11 @@ public class RecipeCacheService : IDisposable
             }
             catch (OperationCanceledException)
             {
-                Plugin.Log.Warning("Universalis API request timed out after 10 seconds");
-                itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList(); // All items failed due to timeout
+                if (timedCancellationToken.IsCancellationRequested)
+                {
+                    Plugin.Log.Warning("Universalis API request timed out after 10 seconds");
+                    itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList(); // All items failed due to timeout
+                }
             }
             catch (Exception ex)
             {
@@ -246,7 +245,7 @@ public class RecipeCacheService : IDisposable
                 continue;
             }
 
-            items.Add(new ModItemStack(itemRow, item.BaseItemId, item.Quantity));
+            items.Add(new ModItemStack(itemRow.ToMod(), item.BaseItemId, item.Quantity));
         }
 
         return items;
@@ -255,7 +254,7 @@ public class RecipeCacheService : IDisposable
     private ModRecipe GetRecipeIngredients(Recipe recipe)
     {
         var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
-        var ingredientsDict = new Dictionary<Item, byte>();
+        var ingredientsDict = new Dictionary<ModItem, byte>();
 
         try
         {
@@ -274,7 +273,7 @@ public class RecipeCacheService : IDisposable
                     // Get the actual Item object from the Excel sheet
                     if (itemSheet.TryGetRow(ingredientRef.RowId, out var item))
                     {
-                        ingredientsDict[item] = amount;
+                        ingredientsDict[item.ToMod()] = amount;
                     }
                 }
             }
@@ -285,7 +284,7 @@ public class RecipeCacheService : IDisposable
             Plugin.Log.Error($"Error getting recipe ingredients: {ex.Message}");
         }
 
-        return new ModRecipe(recipe.ItemResult.Value, ingredientsDict);
+        return new ModRecipe(recipe.ItemResult.Value.ToMod(), ingredientsDict);
     }
 
     private bool CanCraftRecipe(ModRecipe recipe, Dictionary<uint, int> inventoryCounts)
@@ -311,10 +310,14 @@ public class RecipeCacheService : IDisposable
         return true; // Have enough of all ingredients
     }
 
-    private List<ModRecipe> FindRecipesWithIngredient(Item item)
+    private List<ModRecipe> FindRecipesWithIngredient(ModItem item)
     {
-        var recipeSheet = Plugin.DataManager.GetExcelSheet<Recipe>();
 
-        return recipeSheet.Select(GetRecipeIngredients).Where(x => x.Ingredients.ContainsKey(item)).ToList();
+        return FindRecipes().Where(x => x.Ingredients.ContainsKey(item)).ToList();
+    }
+
+    public IEnumerable<ModRecipe> FindRecipes()
+    {
+        return Plugin.DataManager.GetExcelSheet<Recipe>().Select(GetRecipeIngredients);
     }
 }

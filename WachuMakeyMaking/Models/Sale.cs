@@ -1,4 +1,4 @@
-namespace SamplePlugin.Models
+namespace WachuMakeyMaking.Models
 {
     public class Sale
     {
