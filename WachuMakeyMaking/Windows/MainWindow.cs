@@ -50,6 +50,7 @@ public class MainWindow : Window, IDisposable
     private string solverProgressMessage = string.Empty;
     private Solution? currentSolution = null;
     private List<ModRecipeWithValue> currentRecipes = [];
+    private bool shouldSwitchToResultsTab = false;
 
     public MainWindow(Plugin plugin, RecipeCacheService recipeCacheService, SolverService solverService)
         : base($"{Plugin.Name}##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
@@ -166,11 +167,6 @@ public class MainWindow : Window, IDisposable
             OnInventoryChanged([]);
         }
 
-        if (ImGui.Button("Show Settings"))
-        {
-            plugin.ToggleConfigUi();
-        }
-
         // Initialize cache if needed
         _ = recipeCacheService.EnsureCacheInitializedAsync();
 
@@ -198,7 +194,12 @@ public class MainWindow : Window, IDisposable
                 }
 
                 // Tab 3: Results
-                using (var tab = ImRaii.TabItem("Results"))
+                var resultsTabFlags = shouldSwitchToResultsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
+                if (shouldSwitchToResultsTab)
+                {
+                    shouldSwitchToResultsTab = false;
+                }
+                using (var tab = ImRaii.TabItem("Results", resultsTabFlags))
                 {
                     if (tab.Success)
                     {
@@ -226,7 +227,8 @@ public class MainWindow : Window, IDisposable
 
         ImGui.SameLine();
 
-        ImGui.Text($"Available Resources: {allDisplayResources.Length}");
+        var selectedItems = allDisplayResources.Where(r => resourceSelections.GetValueOrDefault(r.Id, false)).ToList();
+        ImGui.Text($"{allDisplayResources.Length} resources found with recipes ({selectedItems.Count} selected)");
 
 
         // Column headers
@@ -367,16 +369,29 @@ public class MainWindow : Window, IDisposable
         ImGui.SameLine();
 
         var selectedRecipes = cachedRecipes.Where(r => recipeSelections.GetValueOrDefault(r.Item.Name.ToString(), false)).ToList();
+        
+        if (selectedRecipes.Count == 0)
+        {
+            ImGui.BeginDisabled();
+        }
+        
         if (ImGui.Button("Solve"))
         {
             // We slight wiggle the costs in order to prefer one over the other to avoid degeneracy
             var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) + 0.001 * index }).ToList();
             currentRecipes = recipes;
+            // Switch to Results tab
+            shouldSwitchToResultsTab = true;
             // Call the solver service
             Task.Run(() => solverService.Solve(
                 recipes,
                 ApplyOverrides(allDisplayResources)
                 ));
+        }
+        
+        if (selectedRecipes.Count == 0)
+        {
+            ImGui.EndDisabled();
         }
 
         ImGui.SameLine();

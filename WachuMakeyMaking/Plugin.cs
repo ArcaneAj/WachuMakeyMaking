@@ -22,10 +22,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private const string CommandName = "/wymm";
 
-    public Configuration Configuration { get; init; }
-
     public readonly WindowSystem WindowSystem = new(Plugin.Name);
-    private ConfigWindow ConfigWindow { get; init; }
     private MainWindow MainWindow { get; init; }
     private UniversalisService UniversalisService { get; init; }
     private CollectableService CollectableService { get; init; }
@@ -34,16 +31,12 @@ public sealed class Plugin : IDalamudPlugin
 
     public Plugin()
     {
-        Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
-
         UniversalisService = new UniversalisService(this);
         CollectableService = new CollectableService(this);
         RecipeCacheService = new RecipeCacheService(this, UniversalisService, CollectableService);
         SolverService = new SolverService((string l) => Log.Info(l), (string l) => Log.Error(l));
-        ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this, RecipeCacheService, SolverService);
 
-        WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(MainWindow);
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
@@ -54,11 +47,8 @@ public sealed class Plugin : IDalamudPlugin
         // Tell the UI system that we want our windows to be drawn through the window system
         PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
 
-        // This adds a button to the plugin installer entry of this plugin which allows
-        // toggling the display status of the configuration ui
-        PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
-
-        // Adds another button doing the same but for the main ui of the plugin
+        // Adds a button to the plugin installer entry of this plugin which allows
+        // toggling the display status of the main ui
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
     }
 
@@ -66,12 +56,10 @@ public sealed class Plugin : IDalamudPlugin
     {
         // Unregister all actions to not leak anything during disposal of plugin
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-        PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
 
         WindowSystem.RemoveAllWindows();
 
-        ConfigWindow.Dispose();
         MainWindow.Dispose();
         UniversalisService.Dispose();
         // SolverService doesn't implement IDisposable, so no need to dispose
@@ -85,6 +73,5 @@ public sealed class Plugin : IDalamudPlugin
         MainWindow.Toggle();
     }
     
-    public void ToggleConfigUi() => ConfigWindow.Toggle();
     public void ToggleMainUi() => MainWindow.Toggle();
 }

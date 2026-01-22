@@ -60,6 +60,12 @@ namespace WachuMakeyMaking.Services
 
         public Solution Solve(List<ModRecipeWithValue> recipes, ModItemStack[] resources)
         {
+            if (recipes.Count == 0)
+            {
+                Reset();
+                return new Solution([], 0, State.Error, []);
+            }
+
             this.currentBest = null!;
             UpdateProgress(State.FindingInitialSolution, "Finding initial solution...");
 
