@@ -1,39 +1,40 @@
 name: PR Builder for WachuMakeyMaking
 
 on:
-  pull_request:
-    branches: [ master ]
+    push:
+        tags:
+            - "v*.*.*" # Triggers on pushes to tags starting with v (e.g., v1.0.0)
 
 jobs:
+    build:
+        runs-on: windows-2022
 
-  build:
-    runs-on: windows-2022
+        env:
+            Solution_Name: WachuMakeyMaking
 
-    env:
-      Solution_Name: WachuMakeyMaking
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v5
 
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v5
+            - name: Install .NET
+              uses: actions/setup-dotnet@v5
+              with:
+                  dotnet-version: 10.0.x
 
-    - name: Install .NET
-      uses: actions/setup-dotnet@v5
-      with:
-        dotnet-version: 9.0.x
+            - name: Download Dalamud
+              run: |
+                  Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
+                  Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev"
 
-    - name: Download Dalamud
-      run: |
-        Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
-        Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev"
+            - name: Build with dotnet
+              run: dotnet build --configuration Release
 
-    - name: Build with dotnet
-      run: dotnet build --configuration Release
-
-    - name: Store artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: WachuMakeyMaking
-        path: .\WachuMakeyMaking\bin\x64\Release\WachuMakeyMaking\*
-        if-no-files-found: error
-        retention-days: 1
+            - name: Create Release and Upload Assets
+              uses: softprops/action-gh-release@v1
+              with:
+                  files: .\WachuMakeyMaking\bin\x64\Release\WachuMakeyMaking\*
+                  draft: false
+                  prerelease: false
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GITHUB_TOKEN is automatically available
 

@@ -54,7 +54,7 @@ public class MainWindow : Window, IDisposable
     private bool shouldSwitchToRecipesTab = false;
 
     public MainWindow(Plugin plugin, RecipeCacheService recipeCacheService, SolverService solverService)
-        : base($"{Plugin.Name}##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
+        : base($"{Plugin.Name}?##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
         SizeConstraints = new WindowSizeConstraints
         {
