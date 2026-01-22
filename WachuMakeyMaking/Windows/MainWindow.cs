@@ -132,9 +132,29 @@ public class MainWindow : Window, IDisposable
         recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
     }
 
-    private void ResetRecipeSelections()
+    private void ResetSolver()
     {
+        solverService.Reset();
+        solverState = SolverService.State.Idle;
+        solverProgressMessage = string.Empty;
+        currentSolution = null;
+        currentRecipes.Clear();
+    }
+
+    private void ResetRecipeOverrides()
+    {
+        recipeValueOverrides.Clear();
         recipeSelections.Clear();
+        ResetSolver();
+    }
+
+    private void ResetResourceOverrides()
+    {
+        resourceQuantityOverrides.Clear();
+        resourceSelections.Clear();
+        ResetSolver();
+        recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
+        ResetRecipeOverrides();
     }
 
     public override void Draw()
@@ -196,7 +216,13 @@ public class MainWindow : Window, IDisposable
         if (ImGui.Button("Submit"))
         {
             recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
-            ResetRecipeSelections();
+            ResetRecipeOverrides();
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("Reset"))
+        {
+            ResetResourceOverrides();
         }
 
         // Column headers
@@ -331,6 +357,12 @@ public class MainWindow : Window, IDisposable
                         recipes,
                         ApplyOverrides(allDisplayResources)
                         ));
+                }
+
+                ImGui.SameLine();
+                if (ImGui.Button("Reset"))
+                {
+                    ResetRecipeOverrides();
                 }
 
                 if (cachedRecipes.Count > 0)

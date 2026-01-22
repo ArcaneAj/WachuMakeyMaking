@@ -39,6 +39,15 @@ namespace WachuMakeyMaking.Services
             this.progressListeners.Add(listener);
         }
 
+        public void Reset()
+        {
+            this.state = State.Idle;
+            this.currentBest = null!;
+            this.lowerBound = 0.0;
+            this.progressMessage = string.Empty;
+            UpdateProgress(State.Idle, string.Empty, null);
+        }
+
         private void UpdateProgress(State newState, string message, Solution? solution = null)
         {
             this.state = newState;
