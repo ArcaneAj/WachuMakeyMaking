@@ -12,8 +12,9 @@
     "Punchline": "Optimise what you make with what you have.",
     "IsHide": false,
     "IsTestingExclusive": false,
-    "DownloadLinkInstall": "https://example.com/path/to/release/output.zip",
-    "DownloadLinkUpdate": "https://example.com/path/to/release/output.zip",
-    "LastUpdate": "1701231234"
+    "DownloadLinkInstall": "https://github.com/ArcaneAj/WachuMakeyMaking/releases/latest/download/latest.zip",
+    "DownloadLinkTesting": "https://github.com/ArcaneAj/WachuMakeyMaking/releases/latest/download/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/ArcaneAj/WachuMakeyMaking/releases/latest/download/latest.zip",
+    "LastUpdate": "1769069376"
   }
 ]
