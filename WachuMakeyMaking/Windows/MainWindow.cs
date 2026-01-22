@@ -434,6 +434,61 @@ public class MainWindow : Window, IDisposable
             ImGuiHelpers.ScaledDummy(10.0f);
             ImGui.Text("Value");
             ImGui.SameLine(85.0f); // Position after the fixed-width textbox
+            
+            // Toggle all checkbox
+            var totalRecipes = cachedRecipes.Count;
+            var selectedCount = cachedRecipes.Count(r => recipeSelections.GetValueOrDefault(r.Item.Name.ToString(), false));
+            bool allSelected = selectedCount == totalRecipes && totalRecipes > 0;
+            bool someSelected = selectedCount > 0 && selectedCount < totalRecipes;
+            bool noneSelected = selectedCount == 0;
+            
+            // For intermediate state, show as empty (unchecked) with a line overlay
+            // For empty state, show as unchecked
+            // For full state, show as checked
+            bool toggleState = allSelected; // Only true when all are selected, false otherwise (including intermediate)
+            
+            // Store the state before the checkbox potentially changes it
+            bool wasAllSelected = allSelected;
+            bool wasSomeSelected = someSelected;
+            
+            if (ImGui.Checkbox("##toggleAll", ref toggleState))
+            {
+                // If clicking when intermediate or empty, select all
+                if (wasSomeSelected || noneSelected)
+                {
+                    foreach (var recipe in cachedRecipes)
+                    {
+                        recipeSelections[recipe.Item.Name.ToString()] = true;
+                    }
+                }
+                // If clicking when all selected, deselect all
+                else if (wasAllSelected)
+                {
+                    foreach (var recipe in cachedRecipes)
+                    {
+                        recipeSelections[recipe.Item.Name.ToString()] = false;
+                    }
+                }
+            }
+            
+            // Draw intermediate indicator if needed (overlay a line to indicate partial selection)
+            if (wasSomeSelected)
+            {
+                var checkboxPos = ImGui.GetItemRectMin();
+                var checkboxSize = ImGui.GetItemRectSize();
+                var drawList = ImGui.GetWindowDrawList();
+                // Draw a horizontal line through the checkbox to indicate intermediate state
+                var center = new Vector2(checkboxPos.X + checkboxSize.X * 0.5f, checkboxPos.Y + checkboxSize.Y * 0.5f);
+                var lineLength = checkboxSize.X * 0.3f;
+                drawList.AddLine(
+                    new Vector2(center.X - lineLength, center.Y),
+                    new Vector2(center.X + lineLength, center.Y),
+                    ImGui.GetColorU32(ImGuiCol.Text),
+                    checkboxSize.Y * 0.6f
+                );
+            }
+            
+            ImGui.SameLine(110.0f); // Position after the checkbox
             ImGui.Text("Recipe");
         }
 
