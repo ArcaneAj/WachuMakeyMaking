@@ -35,38 +35,65 @@ public class UniversalisService : IDisposable
         // Get player's home world ID
         var homeWorldId = Plugin.PlayerState.HomeWorld.RowId;
 
-        var ids = string.Join(',', itemIds);
+        if (itemIds == null) return new AggregatedMarketBoardResult { results = new List<MarketBoardResult>(), failedItems = new List<uint>() };
 
-        if (string.IsNullOrEmpty(ids)) return new AggregatedMarketBoardResult();
+        // Normalize and deduplicate list
+        var idsArray = itemIds.Where(id => id != 0).Distinct().ToArray();
+        if (idsArray.Length == 0) return new AggregatedMarketBoardResult { results = new List<MarketBoardResult>(), failedItems = new List<uint>() };
 
-        try
+        var aggregatedResults = new List<MarketBoardResult>();
+        var failed = new HashSet<uint>();
+
+        // Universalis aggregated endpoint accepts up to ~100 ids per request; split into chunks of 100
+        foreach (var chunk in idsArray.Chunk(100))
         {
-            using var result = await httpClient.GetAsync($"https://universalis.app/api/v2/aggregated/{homeWorldId}/{ids}", cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
 
-            if (result.StatusCode != HttpStatusCode.OK)
+            var ids = string.Join(',', chunk);
+            try
             {
-                throw new HttpRequestException("Invalid status code " + result.StatusCode, null, result.StatusCode);
+                using var response = await httpClient.GetAsync($"https://universalis.app/api/v2/aggregated/{homeWorldId}/{ids}", cancellationToken);
+
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    Plugin.Log.Warning($"Universalis returned status {response.StatusCode} for ids: {ids}");
+                    foreach (var id in chunk) failed.Add(id);
+                    continue;
+                }
+
+                await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                var json = await JsonSerializer.DeserializeAsync<AggregatedMarketBoardResult>(responseStream, cancellationToken: cancellationToken);
+
+                if (json?.results != null)
+                {
+                    aggregatedResults.AddRange(json.results);
+                }
+
+                if (json?.failedItems != null)
+                {
+                    foreach (var id in json.failedItems) failed.Add(id);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Plugin.Log.Warning("Universalis API request cancelled");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.Error($"Error calling Universalis API for ids [{ids}]: {ex.Message}");
+                // mark all ids in this chunk as failed so the caller knows which items didn't return data
+                foreach (var id in chunk) failed.Add(id);
             }
 
-            await using var responseStream = await result.Content.ReadAsStreamAsync(cancellationToken);
-            var json = await JsonSerializer.DeserializeAsync<AggregatedMarketBoardResult>(responseStream, cancellationToken: cancellationToken);
-            if (json == null || json.results == null)
-            {
-                throw new HttpRequestException("Universalis returned null response");
-            }
+            await Task.Delay(50, cancellationToken); // brief pause to avoid rate limiting
+        }
 
-            return json;
-        }
-        catch (OperationCanceledException)
+        return new AggregatedMarketBoardResult
         {
-            Plugin.Log.Warning("Universalis API request timed out after 10 seconds");
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Plugin.Log.Error($"Error calling Universalis API: {ex.Message}");
-            throw;
-        }
+            results = aggregatedResults,
+            failedItems = failed.ToList()
+        };
     }
 
     public static double GetMarketValue(MarketBoardResult marketItem)
