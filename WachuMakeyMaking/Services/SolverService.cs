@@ -10,15 +10,18 @@ namespace WachuMakeyMaking.Services
     {
         private readonly Action<string> log;
         private readonly Action<string> logError;
+        private readonly List<Action<State, string, Solution?>> progressListeners = [];
         private State state;
         private Solution currentBest = null!;
         private double lowerBound = 0.0;
-        private List<ModRecipeWithValue> recipes = [];
+        private string progressMessage = string.Empty;
 
         public enum State
         {
             Idle,
-            InProgress,
+            FindingInitialSolution,
+            Optimising,
+            Finished,
             Optimal,
             Unbounded,
             Error
@@ -31,11 +34,25 @@ namespace WachuMakeyMaking.Services
             this.state = State.Idle;
         }
 
-        public State CurrentState { get { return this.state; } }
+        public void RegisterProgressListener(Action<State, string, Solution?> listener)
+        {
+            this.progressListeners.Add(listener);
+        }
+
+        private void UpdateProgress(State newState, string message, Solution? solution = null)
+        {
+            this.state = newState;
+            this.progressMessage = message;
+            foreach (var listener in this.progressListeners)
+            {
+                listener(newState, message, solution);
+            }
+        }
 
         public Solution Solve(List<ModRecipeWithValue> recipes, ModItemStack[] resources)
         {
-            this.state = State.InProgress;
+            this.currentBest = null!;
+            UpdateProgress(State.FindingInitialSolution, "Finding initial solution...");
 
             if (false) {
                 // Serialize recipes and resources to JSON and log
@@ -70,7 +87,6 @@ namespace WachuMakeyMaking.Services
                 this.log($"{jsonString}");
             }
 
-            this.recipes = recipes;
             var usedResources = resources.Where(x => recipes.Any(y => y.Ingredients.ContainsKey(x.Item)));
 
             var costs = recipes.Select(x => -x.Value).ToArray();
@@ -93,35 +109,33 @@ namespace WachuMakeyMaking.Services
             if (result.State == State.Unbounded)
             {
                 this.log("Problem is unbounded - no optimal solution exists.");
-                this.state = State.Unbounded;
+                UpdateProgress(State.Unbounded, "Problem is unbounded - no optimal solution exists.");
                 return new Solution([], 0, State.Error, []);
             }
             if (result.State != State.Optimal)
             {
                 this.log("Unknown error occurred when finding initial solution.");
-                this.state = result.State;
+                UpdateProgress(State.Error, "Unknown error occurred when finding initial solution.");
                 return new Solution([], 0, State.Error, []);
             }
 
             this.lowerBound = result.OptimalValue;
+            UpdateProgress(State.Optimising, "Optimising...");
             BranchAndBound(problem, result);
 
             if (this.currentBest == null)
             {
-                this.log("Unable to find integral solution");
+                UpdateProgress(State.Error, "Unable to find integral solution");
                 return new Solution([], 0, State.Error, []);
             }
 
             if (this.currentBest.State == State.Optimal)
             {
-                this.log("Optimal solution found:");
-                this.currentBest.Print(recipes, log);
-                this.state = State.Optimal;
+                UpdateProgress(State.Finished, "Finished", this.currentBest);
             }
             else
             {
-                this.log("No optimal solution found.");
-                this.state = State.Error;
+                UpdateProgress(State.Error, "No optimal solution found.");
             }
 
             return this.currentBest;
@@ -135,7 +149,14 @@ namespace WachuMakeyMaking.Services
             if (valuesToBranch.Count == 0) {
                 if (previousResult.OptimalValue < (this.currentBest?.OptimalValue ?? 0.0)){
                     this.currentBest = previousResult;
-                    this.log($"New best integral solution found: {previousResult.OptimalValue}");
+                    if (this.state == State.FindingInitialSolution)
+                    {
+                        UpdateProgress(State.Optimising, "Optimising...", this.currentBest);
+                    }
+                    else
+                    {
+                        UpdateProgress(State.Optimising, this.progressMessage, this.currentBest);
+                    }
                 }
                 return Math.Abs(previousResult.OptimalValue - this.lowerBound) < 1e-10;
             }
@@ -169,6 +190,12 @@ namespace WachuMakeyMaking.Services
                     // Only explore further if this could be better than current best
                     if (this.currentBest == null || positiveResult.OptimalValue < this.currentBest.OptimalValue)
                     {
+                        if (this.currentBest != null)
+                        {
+                            var message = $"Optimising... Current best: {Math.Floor(this.currentBest.OptimalValue)} gil Lower bound: {Math.Floor(this.lowerBound)}";
+                            this.progressMessage = message;
+                            UpdateProgress(State.Optimising, message, this.currentBest);
+                        }
                         BranchAndBound(problem, positiveResult);
                     }
                 }
@@ -193,6 +220,12 @@ namespace WachuMakeyMaking.Services
                     // Only explore further if this could be better than current best
                     if (this.currentBest == null || negativeResult.OptimalValue < this.currentBest.OptimalValue)
                     {
+                        if (this.currentBest != null)
+                        {
+                            var message = $"Optimising... Current best: {Math.Floor(this.currentBest.OptimalValue)} gil Lower bound: {Math.Floor(this.lowerBound)}";
+                            this.progressMessage = message;
+                            UpdateProgress(State.Optimising, message, this.currentBest);
+                        }
                         BranchAndBound(problem, negativeResult);
                     }
                 }

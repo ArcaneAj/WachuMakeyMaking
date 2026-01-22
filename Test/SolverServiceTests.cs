@@ -25,7 +25,6 @@ namespace Test
             var solution = solver.Solve([], []);
             using (Assert.EnterMultipleScope())
             {
-                Assert.That(solver.CurrentState, Is.EqualTo(State.Error));
                 Assert.That(solution, Is.EqualTo(expected));
             }
         }

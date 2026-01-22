@@ -44,6 +44,12 @@ public class MainWindow : Window, IDisposable
 
     private Dictionary<ModItem, ModItemStack> inventoryDict = null!;
 
+    // Solver state tracking
+    private SolverService.State solverState = SolverService.State.Idle;
+    private string solverProgressMessage = string.Empty;
+    private Solution? currentSolution = null;
+    private List<ModRecipeWithValue> currentRecipes = [];
+
     public MainWindow(Plugin plugin, RecipeCacheService recipeCacheService, SolverService solverService)
         : base($"{Plugin.Name}##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
@@ -56,6 +62,9 @@ public class MainWindow : Window, IDisposable
         this.plugin = plugin;
         this.recipeCacheService = recipeCacheService;
         this.solverService = solverService;
+
+        // Register as a progress listener
+        this.solverService.RegisterProgressListener(OnSolverProgressUpdate);
 
         // Subscribe to inventory changes
         Plugin.GameInventory.InventoryChanged += OnInventoryChanged;
@@ -172,7 +181,7 @@ public class MainWindow : Window, IDisposable
                 {
                     if (tab.Success)
                     {
-                        ImGui.Text("Results tab - coming soon!");
+                        DrawResultsTab();
                     }
                 }
             }
@@ -315,10 +324,11 @@ public class MainWindow : Window, IDisposable
                 if (ImGui.Button("Solve"))
                 {
                     // We slight wiggle the costs in order to prefer one over the other to avoid degeneracy
-                    var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) + 0.001 * index });
+                    var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) + 0.001 * index }).ToList();
+                    currentRecipes = recipes;
                     // Call the solver service
                     Task.Run(() => solverService.Solve(
-                        recipes.ToList(),
+                        recipes,
                         ApplyOverrides(allDisplayResources)
                         ));
                 }
@@ -415,6 +425,82 @@ public class MainWindow : Window, IDisposable
         // Return manual override if exists, otherwise calculated value
         if(recipeValueOverrides.TryGetValue(recipeKey, out var overrideValue)) return Math.Min(overrideValue, 999999);
         return calculatedValue;
+    }
+
+    private void OnSolverProgressUpdate(SolverService.State state, string message, Solution? solution)
+    {
+        this.solverState = state;
+        this.solverProgressMessage = message;
+        this.currentSolution = solution;
+    }
+
+    private void DrawResultsTab()
+    {
+        using (var child = ImRaii.Child("ResultsChildWithAScrollbar", Vector2.Zero, true))
+        {
+            if (child.Success)
+            {
+                if (solverState == SolverService.State.Idle)
+                {
+                    ImGui.Text("No solution computed yet. Go to the Recipes tab and click 'Solve' to start.");
+                    return;
+                }
+
+                // Display current state
+                ImGui.Text($"Status: {solverProgressMessage}");
+
+                if (solverState == SolverService.State.FindingInitialSolution)
+                {
+                    ImGui.Text("Finding initial solution...");
+                }
+                else if (solverState == SolverService.State.Optimising)
+                {
+                    ImGui.Text("Optimising...");
+                    if (currentSolution != null)
+                    {
+                        ImGui.Text($"Current best value: {Math.Floor(currentSolution.OptimalValue)} gil");
+                    }
+                }
+                else if (solverState == SolverService.State.Finished && currentSolution != null)
+                {
+                    ImGuiHelpers.ScaledDummy(10.0f);
+                    ImGui.Text("Finished");
+                    ImGui.Separator();
+                    ImGuiHelpers.ScaledDummy(5.0f);
+
+                    // Display solution as a table
+                    if (ImGui.BeginTable("SolutionTable", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
+                    {
+                        ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
+                        ImGui.TableSetupColumn("Quantity", ImGuiTableColumnFlags.WidthFixed, 100.0f);
+                        ImGui.TableHeadersRow();
+
+                        for (int i = 0; i < currentRecipes.Count && i < currentSolution.Values.Count; i++)
+                        {
+                            var quantity = (int)Math.Round(currentSolution.Values[i]);
+                            if (quantity > 0)
+                            {
+                                ImGui.TableNextRow();
+                                ImGui.TableSetColumnIndex(0);
+                                ImGui.Text(currentRecipes[i].Item.Name);
+                                ImGui.TableSetColumnIndex(1);
+                                ImGui.Text(quantity.ToString());
+                            }
+                        }
+
+                        ImGui.EndTable();
+                    }
+
+                    ImGuiHelpers.ScaledDummy(10.0f);
+                    ImGui.Separator();
+                    ImGui.Text($"Total value: {Math.Floor(currentSolution.OptimalValue)} gil");
+                }
+                else if (solverState == SolverService.State.Error || solverState == SolverService.State.Unbounded)
+                {
+                    ImGui.TextColored(new Vector4(1.0f, 0.0f, 0.0f, 1.0f), $"Error: {solverProgressMessage}");
+                }
+            }
+        }
     }
 
 }
