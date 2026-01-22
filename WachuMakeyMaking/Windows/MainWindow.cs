@@ -1,6 +1,7 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Inventory;
 using Dalamud.Game.Inventory.InventoryEventArgTypes;
+using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
@@ -210,9 +211,13 @@ public class MainWindow : Window, IDisposable
 
     private void DrawResourcesTab()
     {
-        ImGui.Text($"Available Resources: {allDisplayResources.Length}");
+        if (ImGui.Button("Reset"))
+        {
+            ResetResourceOverrides();
+        }
 
         ImGui.SameLine();
+
         if (ImGui.Button("Submit"))
         {
             recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
@@ -220,16 +225,15 @@ public class MainWindow : Window, IDisposable
         }
 
         ImGui.SameLine();
-        if (ImGui.Button("Reset"))
-        {
-            ResetResourceOverrides();
-        }
+
+        ImGui.Text($"Available Resources: {allDisplayResources.Length}");
+
 
         // Column headers
+        ImGuiHelpers.ScaledDummy(10.0f);
         ImGui.Text("Quantity");
         ImGui.SameLine(110.0f); // Position after the fixed-width textbox
         ImGui.Text("Resource");
-        ImGui.Separator();
 
         // Normally a BeginChild() would have to be followed by an unconditional EndChild(),
         // ImRaii takes care of this after the scope ends.
@@ -264,6 +268,10 @@ public class MainWindow : Window, IDisposable
                     }
 
                     ImGui.SameLine();
+
+                    // Item icon
+                    DrawnIcon(resourceItem.Id);
+
                     var displayName = resourceItem.Item.Name;
                     if (inventoryDict.TryGetValue(resourceItem.Item, out var originalItemStack))
                     {
@@ -272,6 +280,25 @@ public class MainWindow : Window, IDisposable
                     ImGui.Text(displayName);
                 }
             }
+        }
+    }
+
+    private static void DrawnIcon(uint itemId)
+    {
+        var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
+        var iconLookup = new GameIconLookup
+        {
+            IconId = itemSheet.GetRow(itemId).Icon,
+            ItemHq = false,
+            HiRes = false
+        };
+        var iconTexture = Plugin.TextureProvider.GetFromGameIcon(iconLookup);
+        var iconWrap = iconTexture.GetWrapOrEmpty();
+        if (iconWrap != null)
+        {
+            var iconSize = new Vector2(20.0f * ImGui.GetIO().FontGlobalScale, 20.0f * ImGui.GetIO().FontGlobalScale);
+            ImGui.Image(iconWrap.Handle, iconSize);
+            ImGui.SameLine();
         }
     }
 
@@ -292,6 +319,109 @@ public class MainWindow : Window, IDisposable
 
     private void DrawRecipesTab()
     {
+        if (recipeCacheService.IsCacheInitializing)
+        {
+            ImGui.Text("Loading recipes...");
+
+            if (!string.IsNullOrEmpty(recipeCacheService.CurrentProcessingStep))
+            {
+                ImGui.Text(recipeCacheService.CurrentProcessingStep);
+            }
+
+            if (recipeCacheService.TotalProgress > 0)
+            {
+                var progress = (float)recipeCacheService.CurrentProgress / recipeCacheService.TotalProgress;
+                ImGui.ProgressBar(progress, new Vector2(-1, 20));
+            }
+
+            return;
+        }
+
+        // Create a local snapshot of the cache to avoid race conditions
+        var cachedRecipes = recipeCacheService.CachedRecipes?.ToList() ?? [];
+
+        // Update recipe selections for any new recipes
+        foreach (var recipe in cachedRecipes)
+        {
+            var recipeKey = recipe.Item.Name.ToString();
+            if (!recipeSelections.ContainsKey(recipeKey))
+            {
+                recipeSelections[recipeKey] = CheckedDefault;
+            }
+        }
+
+        // Remove selections and overrides for recipes that are no longer in cache
+        var currentRecipeKeys = new HashSet<string>(cachedRecipes.Select(r => r.Item.Name.ToString()));
+        var keysToRemove = recipeSelections.Keys.Where(key => !currentRecipeKeys.Contains(key)).ToList();
+        foreach (var key in keysToRemove)
+        {
+            recipeSelections.Remove(key);
+            recipeValueOverrides.Remove(key);
+        }
+
+        if (ImGui.Button("Reset"))
+        {
+            ResetRecipeOverrides();
+        }
+
+        ImGui.SameLine();
+
+        var selectedRecipes = cachedRecipes.Where(r => recipeSelections.GetValueOrDefault(r.Item.Name.ToString(), false)).ToList();
+        if (ImGui.Button("Solve"))
+        {
+            // We slight wiggle the costs in order to prefer one over the other to avoid degeneracy
+            var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) + 0.001 * index }).ToList();
+            currentRecipes = recipes;
+            // Call the solver service
+            Task.Run(() => solverService.Solve(
+                recipes,
+                ApplyOverrides(allDisplayResources)
+                ));
+        }
+
+        ImGui.SameLine();
+
+        ImGui.Text($"{cachedRecipes.Count} craftable recipes found ({selectedRecipes.Count} selected)");
+
+        ImGuiHelpers.ScaledDummy(10.0f);
+        if (cachedRecipes.Count > 0)
+        {
+            var currencyGrouping = cachedRecipes.GroupBy(x => x.Currency.RowId).Where(x => x.Key != 1);
+
+            // Clean up currency values for currencies that are no longer present
+            var currentCurrencyIds = new HashSet<uint>(currencyGrouping.Select(g => g.Key));
+            var currencyIdsToRemove = currencyValues.Keys.Where(id => !currentCurrencyIds.Contains(id)).ToList();
+            foreach (var id in currencyIdsToRemove)
+            {
+                currencyValues.Remove(id);
+            }
+
+            // Editable scrip value controls
+            foreach (var currencyGroup in currencyGrouping)
+            {
+                var currencyId = currencyGroup.Key;
+                var currency = currencyGroup.First().Currency;
+
+                // Initialize currency value if not present
+                if (!currencyValues.ContainsKey(currencyId))
+                {
+                    currencyValues[currencyId] = 1.0f;
+                }
+
+                var currencyValue = currencyValues[currencyId];
+                if (ImGui.InputFloat($"{currency.Name} gil value", ref currencyValue, 0, 0, "%.2f"))
+                {
+                    currencyValues[currencyId] = currencyValue;
+                }
+            }
+
+            // Column headers
+            ImGuiHelpers.ScaledDummy(10.0f);
+            ImGui.Text("Value");
+            ImGui.SameLine(85.0f); // Position after the fixed-width textbox
+            ImGui.Text("Recipe");
+        }
+
         // Normally a BeginChild() would have to be followed by an unconditional EndChild(),
         // ImRaii takes care of this after the scope ends.
         // This works for all ImGui functions that require specific handling, examples are BeginTable() or Indent().
@@ -300,113 +430,8 @@ public class MainWindow : Window, IDisposable
             // Check if this child is drawing
             if (child.Success)
             {
-                if (recipeCacheService.IsCacheInitializing)
-                {
-                    ImGui.Text("Loading recipes...");
-
-                    if (!string.IsNullOrEmpty(recipeCacheService.CurrentProcessingStep))
-                    {
-                        ImGui.Text(recipeCacheService.CurrentProcessingStep);
-                    }
-
-                    if (recipeCacheService.TotalProgress > 0)
-                    {
-                        var progress = (float)recipeCacheService.CurrentProgress / recipeCacheService.TotalProgress;
-                        ImGui.ProgressBar(progress, new Vector2(-1, 20));
-                    }
-
-                    return;
-                }
-
-                // Create a local snapshot of the cache to avoid race conditions
-                var cachedRecipes = recipeCacheService.CachedRecipes?.ToList() ?? [];
-
-                // Update recipe selections for any new recipes
-                foreach (var recipe in cachedRecipes)
-                {
-                    var recipeKey = recipe.Item.Name.ToString();
-                    if (!recipeSelections.ContainsKey(recipeKey))
-                    {
-                        recipeSelections[recipeKey] = CheckedDefault;
-                    }
-
-                    if (recipe.Item.Name.ToString().Contains("Grade 4 Artisanal")) recipeSelections[recipeKey] = true;
-                }
-
-                // Remove selections and overrides for recipes that are no longer in cache
-                var currentRecipeKeys = new HashSet<string>(cachedRecipes.Select(r => r.Item.Name.ToString()));
-                var keysToRemove = recipeSelections.Keys.Where(key => !currentRecipeKeys.Contains(key)).ToList();
-                foreach (var key in keysToRemove)
-                {
-                    recipeSelections.Remove(key);
-                    recipeValueOverrides.Remove(key);
-                }
-
-                var selectedRecipes = cachedRecipes.Where(r => recipeSelections.GetValueOrDefault(r.Item.Name.ToString(), false)).ToList();
-
-                ImGui.Text($"{cachedRecipes.Count} craftable recipes found ({selectedRecipes.Count} selected)");
-
-                ImGui.SameLine();
-                if (ImGui.Button("Solve"))
-                {
-                    // We slight wiggle the costs in order to prefer one over the other to avoid degeneracy
-                    var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) + 0.001 * index }).ToList();
-                    currentRecipes = recipes;
-                    // Call the solver service
-                    Task.Run(() => solverService.Solve(
-                        recipes,
-                        ApplyOverrides(allDisplayResources)
-                        ));
-                }
-
-                ImGui.SameLine();
-                if (ImGui.Button("Reset"))
-                {
-                    ResetRecipeOverrides();
-                }
-
                 if (cachedRecipes.Count > 0)
                 {
-                    ImGuiHelpers.ScaledDummy(10.0f);
-
-                    var currencyGrouping = cachedRecipes.GroupBy(x => x.Currency.RowId).Where(x => x.Key != 1);
-
-                    // Clean up currency values for currencies that are no longer present
-                    var currentCurrencyIds = new HashSet<uint>(currencyGrouping.Select(g => g.Key));
-                    var currencyIdsToRemove = currencyValues.Keys.Where(id => !currentCurrencyIds.Contains(id)).ToList();
-                    foreach (var id in currencyIdsToRemove)
-                    {
-                        currencyValues.Remove(id);
-                    }
-
-                    // Editable scrip value controls
-                    foreach (var currencyGroup in currencyGrouping)
-                    {
-                        var currencyId = currencyGroup.Key;
-                        var currency = currencyGroup.First().Currency;
-
-                        // Initialize currency value if not present
-                        if (!currencyValues.ContainsKey(currencyId))
-                        {
-                            currencyValues[currencyId] = 1.0f;
-                        }
-
-                        var currencyValue = currencyValues[currencyId];
-                        if (ImGui.InputFloat($"{currency.Name} gil value", ref currencyValue, 0, 0, "%.2f"))
-                        {
-                            currencyValues[currencyId] = currencyValue;
-                        }
-                    }
-
-                    ImGuiHelpers.ScaledDummy(5.0f);
-                    ImGui.Text("Craftable Recipes:");
-
-                    // Column headers
-                    ImGui.Text("Value");
-                    ImGui.SameLine(85.0f); // Position after the fixed-width textbox
-                    ImGui.Text("Recipe");
-                    ImGui.Separator();
-
                     foreach (var recipe in cachedRecipes.OrderBy(r => r.Item.Name.ToString()))
                     {
                         var recipeKey = recipe.Item.Name.ToString();
@@ -430,8 +455,11 @@ public class MainWindow : Window, IDisposable
                         {
                             recipeSelections[recipeKey] = isSelected;
                         }
-
                         ImGui.SameLine();
+
+                        // Item icon
+                        DrawnIcon(recipe.Item.RowId);
+
                         ImGui.Text($"{recipe.Item.Name}");
                     }
                 }
@@ -514,6 +542,7 @@ public class MainWindow : Window, IDisposable
                             {
                                 ImGui.TableNextRow();
                                 ImGui.TableSetColumnIndex(0);
+                                DrawnIcon(currentRecipes[i].Item.RowId);
                                 ImGui.Text(currentRecipes[i].Item.Name);
                                 ImGui.TableSetColumnIndex(1);
                                 ImGui.Text(quantity.ToString());

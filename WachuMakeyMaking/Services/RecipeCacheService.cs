@@ -40,8 +40,8 @@ public class RecipeCacheService
     public List<ModRecipeWithValue> CachedRecipes => cachedRecipes;
 
     private CancellationTokenSource cancellationTokenSource = new();
-    private ModItemStack[] items;
-    private ModItemStack[] crystals;
+    private ModItemStack[] items = [];
+    private ModItemStack[] crystals = [];
 
     public void ForceRefresh(ModItemStack[] modItemStacks)
     {
