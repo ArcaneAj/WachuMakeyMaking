@@ -51,6 +51,7 @@ public class MainWindow : Window, IDisposable
     private Solution? currentSolution = null;
     private List<ModRecipeWithValue> currentRecipes = [];
     private bool shouldSwitchToResultsTab = false;
+    private bool shouldSwitchToRecipesTab = false;
 
     public MainWindow(Plugin plugin, RecipeCacheService recipeCacheService, SolverService solverService)
         : base($"{Plugin.Name}##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
@@ -72,49 +73,6 @@ public class MainWindow : Window, IDisposable
         Plugin.GameInventory.InventoryChanged += OnInventoryChanged;
 
         allIngredients = [.. recipeCacheService.FindRecipes().SelectMany(x => x.Ingredients.Keys)];
-
-        if (false)
-        {
-            // One-time CSV dump of all items, streamed directly to file to avoid large in-memory buffers
-            try
-            {
-                var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
-                if (itemSheet != null)
-                {
-                    var path = Path.Combine(Plugin.PluginInterface.ConfigDirectory.FullName, "G:\\Code\\WachuMakeyMaking\\ItemDump.csv");
-
-                    using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
-                    using var writer = new StreamWriter(stream, new UTF8Encoding(false));
-
-                    // Optional header
-                    writer.WriteLine("Name,RowId,Description");
-
-                    foreach (var item in itemSheet)
-                    {
-                        var name = item.Name.ToString().Replace("\"", "\"\"");
-                        var description = item.Description.ToString().Replace("\"", "\"\"");
-
-                        writer.Write('"');
-                        writer.Write(name);
-                        writer.Write('"');
-                        writer.Write(',');
-                        writer.Write(item.RowId);
-                        writer.Write(',');
-                        writer.Write('"');
-                        writer.Write(description);
-                        writer.Write('"');
-                        writer.WriteLine();
-                    }
-
-                    writer.Flush();
-                    Plugin.Log.Information($"Item dump written to {path}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Plugin.Log.Error($"Failed to dump item sheet: {ex}");
-            }
-        }
     }
 
     public void Dispose()
@@ -185,7 +143,12 @@ public class MainWindow : Window, IDisposable
                 }
 
                 // Tab 2: Recipes (current content)
-                using (var tab = ImRaii.TabItem("Recipes"))
+                var recipesTabFlags = shouldSwitchToRecipesTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
+                if (shouldSwitchToRecipesTab)
+                {
+                    shouldSwitchToRecipesTab = false;
+                }
+                using (var tab = ImRaii.TabItem("Recipes", recipesTabFlags))
                 {
                     if (tab.Success)
                     {
@@ -223,6 +186,7 @@ public class MainWindow : Window, IDisposable
         {
             recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
             ResetRecipeOverrides();
+            shouldSwitchToRecipesTab = true;
         }
 
         ImGui.SameLine();
@@ -322,7 +286,7 @@ public class MainWindow : Window, IDisposable
 
                     // Resource column (icon + name)
                     ImGui.TableSetColumnIndex(2);
-                    DrawnIcon(resourceItem.Id);
+                    DrawIcon(resourceItem.Id);
                     var displayName = resourceItem.Item.Name;
                     if (inventoryDict.TryGetValue(resourceItem.Item, out var originalItemStack))
                     {
@@ -336,7 +300,7 @@ public class MainWindow : Window, IDisposable
         }
     }
 
-    private static void DrawnIcon(uint itemId)
+    private static void DrawIcon(uint itemId, double value = -1)
     {
         var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
         var iconLookup = new GameIconLookup
@@ -351,6 +315,18 @@ public class MainWindow : Window, IDisposable
         {
             var iconSize = new Vector2(20.0f * ImGui.GetIO().FontGlobalScale, 20.0f * ImGui.GetIO().FontGlobalScale);
             ImGui.Image(iconWrap.Handle, iconSize);
+
+            if (value >= 0)
+            {
+                // Show value tooltip when the icon is hovered
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.BeginTooltip();
+                    ImGui.Text($"Value: {Math.Floor(value)} gil");
+                    ImGui.EndTooltip();
+                }
+            }
+
             ImGui.SameLine();
         }
     }
@@ -580,7 +556,7 @@ public class MainWindow : Window, IDisposable
 
                         // Recipe column (icon + name)
                         ImGui.TableSetColumnIndex(2);
-                        DrawnIcon(recipe.Item.RowId);
+                        DrawIcon(recipe.Item.RowId);
                         ImGui.Text($"{recipe.Item.Name}");
                     }
 
@@ -653,10 +629,12 @@ public class MainWindow : Window, IDisposable
                 if (!child.Success) return;
                 var tableFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.ScrollY;
                 // Display solution as a table
-                if (ImGui.BeginTable("SolutionTable", 2, tableFlags))
+                if (ImGui.BeginTable("SolutionTable", 4, tableFlags))
                 {
                     ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableSetupColumn("Per Unit", ImGuiTableColumnFlags.WidthFixed, 100.0f);
                     ImGui.TableSetupColumn("Quantity", ImGuiTableColumnFlags.WidthFixed, 100.0f);
+                    ImGui.TableSetupColumn("Contribution", ImGuiTableColumnFlags.WidthFixed, 100.0f);
                     ImGui.TableHeadersRow();
 
                     for (int i = 0; i < currentRecipes.Count && i < currentSolution.Values.Count; i++)
@@ -666,10 +644,14 @@ public class MainWindow : Window, IDisposable
                         {
                             ImGui.TableNextRow();
                             ImGui.TableSetColumnIndex(0);
-                            DrawnIcon(currentRecipes[i].Item.RowId);
+                            DrawIcon(currentRecipes[i].Item.RowId, currentRecipes[i].Value);
                             ImGui.Text(currentRecipes[i].Item.Name);
                             ImGui.TableSetColumnIndex(1);
                             ImGui.Text(quantity.ToString());
+                            ImGui.TableSetColumnIndex(2);
+                            ImGui.Text($"{(int)currentRecipes[i].Value}");
+                            ImGui.TableSetColumnIndex(3);
+                            ImGui.Text($"{(int)currentRecipes[i].Value * quantity}");
                         }
                     }
 

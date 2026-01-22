@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 
 namespace WachuMakeyMaking.Services
 {
@@ -15,6 +16,7 @@ namespace WachuMakeyMaking.Services
         private Solution currentBest = null!;
         private double lowerBound = 0.0;
         private string progressMessage = string.Empty;
+        private CancellationTokenSource cancellationTokenSource = new();
 
         public enum State
         {
@@ -41,6 +43,7 @@ namespace WachuMakeyMaking.Services
 
         public void Reset()
         {
+            cancellationTokenSource.Cancel();
             this.state = State.Idle;
             this.currentBest = null!;
             this.lowerBound = 0.0;
@@ -60,103 +63,80 @@ namespace WachuMakeyMaking.Services
 
         public Solution Solve(List<ModRecipeWithValue> recipes, ModItemStack[] resources)
         {
-            if (recipes.Count == 0)
+            try
             {
-                Reset();
-                return new Solution([], 0, State.Error, []);
-            }
-
-            this.currentBest = null!;
-            UpdateProgress(State.FindingInitialSolution, "Finding initial solution...");
-
-            if (false) {
-                // Serialize recipes and resources to JSON and log
-                var serializableRecipes = recipes.Select(r => new
+                if (recipes.Count == 0)
                 {
-                    Item = new { r.Item.RowId, r.Item.Name },
-                    Ingredients = r.Ingredients.Select(kvp => new
-                    {
-                        Item = new { kvp.Key.RowId, kvp.Key.Name },
-                        Quantity = kvp.Value
-                    }).ToList(),
-                    r.Value,
-                    Currency = new { r.Currency.RowId, r.Currency.Name }
-                }).ToList();
+                    Reset();
+                    return new Solution([], 0, State.Error, []);
+                }
 
-                var serializableResources = resources.Select(r => new
+                cancellationTokenSource = new();
+                var cancellationToken = cancellationTokenSource.Token;
+
+                this.currentBest = null!;
+                UpdateProgress(State.FindingInitialSolution, "Finding initial solution...");
+
+                var usedResources = resources.Where(x => recipes.Any(y => y.Ingredients.ContainsKey(x.Item)));
+
+                var costs = recipes.Select(x => -x.Value).ToArray();
+
+                var constraintsList = new List<int>();
+                var assignmentsList = new List<int[]>();
+
+                foreach (var resource in usedResources)
                 {
-                    Item = new { r.Item.RowId, r.Item.Name },
-                    r.Quantity
-                }).ToList();
+                    constraintsList.Add(resource.Quantity);
+                    var row = recipes.Select(recipe => (int)recipe.Ingredients.GetValueOrDefault(resource.Item));
+                    assignmentsList.Add([.. row]);
 
-                var inputData = new
+                    var recipesUsingResource = recipes.Where(recipe => recipe.Ingredients.ContainsKey(resource.Item)).ToList();
+                }
+
+                var branches = new Stack<Branch>();
+                var problem = new Problem(assignmentsList.ToArray(), costs, constraintsList.ToArray());
+                var result = Solve(problem, branches, cancellationToken);
+                if (result.State == State.Unbounded)
                 {
-                    Recipes = serializableRecipes,
-                    Resources = serializableResources
-                };
-                var jsonOptions = new JsonSerializerOptions
+                    this.log("Problem is unbounded - no optimal solution exists.");
+                    UpdateProgress(State.Unbounded, "Problem is unbounded - no optimal solution exists.");
+                    return new Solution([], 0, State.Error, []);
+                }
+                if (result.State != State.Optimal)
                 {
-                    WriteIndented = true
-                };
-                var jsonString = JsonSerializer.Serialize(inputData, jsonOptions);
-                this.log($"{jsonString}");
+                    this.log("Unknown error occurred when finding initial solution.");
+                    UpdateProgress(State.Error, "Unknown error occurred when finding initial solution.");
+                    return new Solution([], 0, State.Error, []);
+                }
+
+                this.lowerBound = result.OptimalValue;
+                UpdateProgress(State.Optimising, "Optimising...");
+                BranchAndBound(problem, result, cancellationToken);
+
+                if (this.currentBest == null)
+                {
+                    UpdateProgress(State.Error, "Unable to find integral solution");
+                    return new Solution([], 0, State.Error, []);
+                }
+
+                if (this.currentBest.State == State.Optimal)
+                {
+                    UpdateProgress(State.Finished, "Finished", this.currentBest);
+                }
+                else
+                {
+                    UpdateProgress(State.Error, "No optimal solution found.");
+                }
+
             }
-
-            var usedResources = resources.Where(x => recipes.Any(y => y.Ingredients.ContainsKey(x.Item)));
-
-            var costs = recipes.Select(x => -x.Value).ToArray();
-
-            var constraintsList = new List<int>();
-            var assignmentsList = new List<int[]>();
-
-            foreach (var resource in usedResources)
-            {
-                constraintsList.Add(resource.Quantity);
-                var row = recipes.Select(recipe => (int)recipe.Ingredients.GetValueOrDefault(resource.Item));
-                assignmentsList.Add([..row]);
-
-                var recipesUsingResource = recipes.Where(recipe => recipe.Ingredients.ContainsKey(resource.Item)).ToList();
-            }
-
-            var branches = new Stack<Branch>();
-            var problem = new Problem(assignmentsList.ToArray(), costs, constraintsList.ToArray());
-            var result = Solve(problem, branches);
-            if (result.State == State.Unbounded)
-            {
-                this.log("Problem is unbounded - no optimal solution exists.");
-                UpdateProgress(State.Unbounded, "Problem is unbounded - no optimal solution exists.");
-                return new Solution([], 0, State.Error, []);
-            }
-            if (result.State != State.Optimal)
-            {
-                this.log("Unknown error occurred when finding initial solution.");
-                UpdateProgress(State.Error, "Unknown error occurred when finding initial solution.");
-                return new Solution([], 0, State.Error, []);
-            }
-
-            this.lowerBound = result.OptimalValue;
-            UpdateProgress(State.Optimising, "Optimising...");
-            BranchAndBound(problem, result);
-
-            if (this.currentBest == null)
-            {
-                UpdateProgress(State.Error, "Unable to find integral solution");
-                return new Solution([], 0, State.Error, []);
-            }
-
-            if (this.currentBest.State == State.Optimal)
-            {
-                UpdateProgress(State.Finished, "Finished", this.currentBest);
-            }
-            else
-            {
-                UpdateProgress(State.Error, "No optimal solution found.");
+            catch (OperationCanceledException) {
+                // Quietly accept that the operation was cancelled
             }
 
             return this.currentBest;
         }
 
-        private bool BranchAndBound(Problem problem, Solution previousResult)
+        private bool BranchAndBound(Problem problem, Solution previousResult, CancellationToken cancellationToken)
         {
             var valuesToBranch = previousResult.Values.Select((double val, int index) => (val, index)).Where(x => x.val - Math.Floor(x.val) > 1e-10).ToList();
 
@@ -186,7 +166,7 @@ namespace WachuMakeyMaking.Services
             var positiveBranches = new Stack<Branch>(previousResult.Branches.Reverse());
             positiveBranches.Push(positiveBranch);
 
-            var positiveResult = Solve(problem, positiveBranches);
+            var positiveResult = Solve(problem, positiveBranches, cancellationToken);
             if (positiveResult.OptimalValue < this.lowerBound)
             {
                 this.logError("Branch result was below the lower bound, something very wrong must have happened.");
@@ -211,7 +191,7 @@ namespace WachuMakeyMaking.Services
                             this.progressMessage = message;
                             UpdateProgress(State.Optimising, message, this.currentBest);
                         }
-                        BranchAndBound(problem, positiveResult);
+                        BranchAndBound(problem, positiveResult, cancellationToken);
                     }
                 }
             }
@@ -221,7 +201,7 @@ namespace WachuMakeyMaking.Services
             var negativeBranches = new Stack<Branch>(previousResult.Branches.Reverse());
             negativeBranches.Push(negativeBranch);
 
-            var negativeResult = Solve(problem, negativeBranches);
+            var negativeResult = Solve(problem, negativeBranches, cancellationToken);
             if (negativeResult.State == State.Optimal)
             {
                 // Verify the solution satisfies the branch constraint
@@ -241,7 +221,7 @@ namespace WachuMakeyMaking.Services
                             this.progressMessage = message;
                             UpdateProgress(State.Optimising, message, this.currentBest);
                         }
-                        BranchAndBound(problem, negativeResult);
+                        BranchAndBound(problem, negativeResult, cancellationToken);
                     }
                 }
             }
@@ -249,7 +229,7 @@ namespace WachuMakeyMaking.Services
             return false;
         }
 
-        private Solution Solve(Problem problem, Stack<Branch> branches)
+        private Solution Solve(Problem problem, Stack<Branch> branches, CancellationToken cancellationToken)
         {
             try
             {
@@ -329,7 +309,7 @@ namespace WachuMakeyMaking.Services
                 // Slack variables have cost 0
 
                 // Solve using revised simplex
-                var result = RevisedSimplex(A_augmented, c_augmented, n, m, basis, x);
+                var result = RevisedSimplex(A_augmented, c_augmented, n, m, basis, x, cancellationToken);
 
                 if (result.status == "optimal")
                 {
@@ -357,8 +337,9 @@ namespace WachuMakeyMaking.Services
         }
 
         private (string status, double[] x, double optimalValue, int[] basis) RevisedSimplex(
-            double[][] A, double[] c, int n, int m, int[] basis, double[] x)
+            double[][] A, double[] c, int n, int m, int[] basis, double[] x, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // Initialize basis inverse (identity matrix)
             double[][] B_inv = new double[m][];
             for (int i = 0; i < m; i++)
@@ -375,6 +356,7 @@ namespace WachuMakeyMaking.Services
 
             while (iteration < maxIterations)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 iteration++;
 
                 // Compute reduced costs: c_j - c_B * B_inv * A_j

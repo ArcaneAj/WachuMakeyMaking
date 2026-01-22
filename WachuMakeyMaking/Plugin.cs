@@ -10,7 +10,7 @@ namespace WachuMakeyMaking;
 
 public sealed class Plugin : IDalamudPlugin
 {
-    public static readonly string Name = "WachuMakeyMaking";
+    public static readonly string Name = "WachuMakeyMaking?";
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
     [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
@@ -62,7 +62,7 @@ public sealed class Plugin : IDalamudPlugin
 
         MainWindow.Dispose();
         UniversalisService.Dispose();
-        // SolverService doesn't implement IDisposable, so no need to dispose
+        SolverService.Reset();
 
         CommandManager.RemoveHandler(CommandName);
     }
