@@ -32,7 +32,7 @@ jobs:
             - name: Create Release and Upload Assets
               uses: softprops/action-gh-release@v1
               with:
-                  files: .\WachuMakeyMaking\bin\x64\Release\WachuMakeyMaking\latest.zip
+                  files: WachuMakeyMaking/bin/x64/Release/WachuMakeyMaking/latest.zip
                   draft: false
                   prerelease: false
               env:
