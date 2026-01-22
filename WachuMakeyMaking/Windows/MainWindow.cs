@@ -119,7 +119,8 @@ public class MainWindow : Window, IDisposable
 
     public override void Draw()
     {
-        if (allDisplayResources == null || inventoryDict == null) {
+        if (allDisplayResources == null || inventoryDict == null)
+        {
             allDisplayResources = [];
             inventoryDict = [];
             OnInventoryChanged([]);
@@ -405,7 +406,7 @@ public class MainWindow : Window, IDisposable
         if (ImGui.Button("Solve"))
         {
             // We slight wiggle the costs in order to prefer one over the other to avoid degeneracy
-            var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) + 0.001 * index }).ToList();
+            var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) * 1.001 * index }).ToList();
             currentRecipes = recipes;
             // Switch to Results tab
             shouldSwitchToResultsTab = true;
@@ -453,7 +454,8 @@ public class MainWindow : Window, IDisposable
                 var currencyValue = currencyValues[currencyId];
                 if (ImGui.InputFloat($"{currency.Name} gil value", ref currencyValue, 0, 0, "%.2f"))
                 {
-                    currencyValues[currencyId] = currencyValue;
+                    // Cap at 1000 to avoid prices exceeding 999999
+                    currencyValues[currencyId] = Math.Min(currencyValue, 1000.0f);
                 }
             }
 
@@ -582,7 +584,7 @@ public class MainWindow : Window, IDisposable
         var calculatedValue = Math.Min((int)Math.Floor(recipe.Value * currencyMultiplier), 999999);
 
         // Return manual override if exists, otherwise calculated value
-        if(recipeValueOverrides.TryGetValue(recipeKey, out var overrideValue)) return Math.Min(overrideValue, 999999);
+        if (recipeValueOverrides.TryGetValue(recipeKey, out var overrideValue)) return Math.Min(overrideValue, 999999);
         return calculatedValue;
     }
 

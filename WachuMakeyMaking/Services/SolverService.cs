@@ -129,7 +129,8 @@ namespace WachuMakeyMaking.Services
                 }
 
             }
-            catch (OperationCanceledException) {
+            catch (OperationCanceledException)
+            {
                 // Quietly accept that the operation was cancelled
             }
 
@@ -141,8 +142,10 @@ namespace WachuMakeyMaking.Services
             var valuesToBranch = previousResult.Values.Select((double val, int index) => (val, index)).Where(x => x.val - Math.Floor(x.val) > 1e-10).ToList();
 
             // If we're integral, check if this is the best solution so far
-            if (valuesToBranch.Count == 0) {
-                if (previousResult.OptimalValue < (this.currentBest?.OptimalValue ?? 0.0)){
+            if (valuesToBranch.Count == 0)
+            {
+                if (previousResult.OptimalValue < (this.currentBest?.OptimalValue ?? 0.0))
+                {
                     this.currentBest = previousResult;
                     if (this.state == State.FindingInitialSolution)
                     {
@@ -156,8 +159,13 @@ namespace WachuMakeyMaking.Services
                 return Math.Abs(previousResult.OptimalValue - this.lowerBound) < 1e-10;
             }
 
-            // Branch on the first fractional variable
-            var branchVar = valuesToBranch[0];
+            // Branch on the least fractional variable (closest to an integer)
+            var branchVar = valuesToBranch.OrderBy(x =>
+            {
+                var frac = x.val - Math.Floor(x.val);
+                return Math.Min(frac, 1 - frac); // Distance to nearest integer
+            }).First();
+
             var floorVal = (int)Math.Floor(branchVar.val);
             var ceilVal = (int)Math.Ceiling(branchVar.val);
 
@@ -529,9 +537,9 @@ namespace WachuMakeyMaking.Services
         }
     }
 
-    public record Problem (int[][] Assignments, double[] Costs, int[] Constraints);
+    public record Problem(int[][] Assignments, double[] Costs, int[] Constraints);
 
-    public record Solution (
+    public record Solution(
         List<double> Values,
         double OptimalValue,
         SolverService.State State,
@@ -575,5 +583,5 @@ namespace WachuMakeyMaking.Services
         }
     }
 
-    public record Branch (int Index, int Value, bool IsPositive);
+    public record Branch(int Index, int Value, bool IsPositive);
 }
