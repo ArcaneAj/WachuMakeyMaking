@@ -17,6 +17,8 @@ namespace WachuMakeyMaking.Services
         private double lowerBound = 0.0;
         private string progressMessage = string.Empty;
         private CancellationTokenSource cancellationTokenSource = new();
+        private HashSet<string> infeasibleBranches = new();
+        private Dictionary<string, int> constraintViolationCount = new();
 
         public enum State
         {
@@ -48,6 +50,8 @@ namespace WachuMakeyMaking.Services
             this.currentBest = null!;
             this.lowerBound = 0.0;
             this.progressMessage = string.Empty;
+            this.infeasibleBranches.Clear();
+            this.constraintViolationCount.Clear();
             UpdateProgress(State.Idle, string.Empty, null);
         }
 
@@ -129,7 +133,8 @@ namespace WachuMakeyMaking.Services
                 }
 
             }
-            catch (OperationCanceledException) {
+            catch (OperationCanceledException)
+            {
                 // Quietly accept that the operation was cancelled
             }
 
@@ -141,8 +146,10 @@ namespace WachuMakeyMaking.Services
             var valuesToBranch = previousResult.Values.Select((double val, int index) => (val, index)).Where(x => x.val - Math.Floor(x.val) > 1e-10).ToList();
 
             // If we're integral, check if this is the best solution so far
-            if (valuesToBranch.Count == 0) {
-                if (previousResult.OptimalValue < (this.currentBest?.OptimalValue ?? 0.0)){
+            if (valuesToBranch.Count == 0)
+            {
+                if (previousResult.OptimalValue < (this.currentBest?.OptimalValue ?? 0.0))
+                {
                     this.currentBest = previousResult;
                     if (this.state == State.FindingInitialSolution)
                     {
@@ -156,8 +163,19 @@ namespace WachuMakeyMaking.Services
                 return Math.Abs(previousResult.OptimalValue - this.lowerBound) < 1e-10;
             }
 
-            // Branch on the first fractional variable
+            // Branch on the first fractional variable that isn't permanently infeasible
             var branchVar = valuesToBranch[0];
+            foreach (var candidate in valuesToBranch)
+            {
+                string upKey = $"{candidate.index}_ub_{Math.Floor(candidate.val)}";
+                string downKey = $"{candidate.index}_lb_{Math.Ceiling(candidate.val)}";
+                if (!constraintViolationCount.ContainsKey(upKey) && !constraintViolationCount.ContainsKey(downKey))
+                {
+                    branchVar = candidate;
+                    break;
+                }
+            }
+
             var floorVal = (int)Math.Floor(branchVar.val);
             var ceilVal = (int)Math.Ceiling(branchVar.val);
 
@@ -166,32 +184,48 @@ namespace WachuMakeyMaking.Services
             var positiveBranches = new Stack<Branch>(previousResult.Branches.Reverse());
             positiveBranches.Push(positiveBranch);
 
-            var positiveResult = Solve(problem, positiveBranches, cancellationToken);
-            if (positiveResult.OptimalValue < this.lowerBound)
+            string positiveBranchKey = GetBranchKey(positiveBranches);
+            string posConstraintKey = $"{branchVar.index}_ub_{floorVal}";
+            if (!infeasibleBranches.Contains(positiveBranchKey))
             {
-                this.logError("Branch result was below the lower bound, something very wrong must have happened.");
-            }
-
-            if (positiveResult.State == State.Optimal)
-            {
-                // Verify the solution satisfies the branch constraint
-                bool feasible = positiveResult.Values[branchVar.index] <= floorVal + 1e-10;
-                if (!feasible)
+                var positiveResult = Solve(problem, positiveBranches, cancellationToken);
+                if (positiveResult.OptimalValue < this.lowerBound)
                 {
-                    this.log($"Branch constraint violated: x[{branchVar.index}] = {positiveResult.Values[branchVar.index]} > {floorVal}, skipping");
+                    this.logError("Branch result was below the lower bound, something very wrong must have happened.");
                 }
-                else
+
+                if (positiveResult.State == State.Optimal)
                 {
-                    // Only explore further if this could be better than current best
-                    if (this.currentBest == null || positiveResult.OptimalValue < this.currentBest.OptimalValue)
+                    // Verify the solution satisfies the branch constraint
+                    bool feasible = positiveResult.Values[branchVar.index] <= floorVal + 1e-10;
+                    if (!feasible)
                     {
-                        if (this.currentBest != null)
+                        this.log($"Branch constraint violated: x[{branchVar.index}] = {positiveResult.Values[branchVar.index]} > {floorVal}, marking as infeasible");
+                        infeasibleBranches.Add(positiveBranchKey);
+
+                        // Track constraint-level violations
+                        if (!constraintViolationCount.ContainsKey(posConstraintKey))
+                            constraintViolationCount[posConstraintKey] = 0;
+                        constraintViolationCount[posConstraintKey]++;
+
+                        if (constraintViolationCount[posConstraintKey] >= 3)
                         {
-                            var message = $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
-                            this.progressMessage = message;
-                            UpdateProgress(State.Optimising, message, this.currentBest);
+                            this.log($"Constraint x[{branchVar.index}] <= {floorVal} violated {constraintViolationCount[posConstraintKey]} times, treating as permanently infeasible");
                         }
-                        BranchAndBound(problem, positiveResult, cancellationToken);
+                    }
+                    else
+                    {
+                        // Only explore further if this could be better than current best
+                        if (this.currentBest == null || positiveResult.OptimalValue < this.currentBest.OptimalValue)
+                        {
+                            if (this.currentBest != null)
+                            {
+                                var message = $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
+                                this.progressMessage = message;
+                                UpdateProgress(State.Optimising, message, this.currentBest);
+                            }
+                            BranchAndBound(problem, positiveResult, cancellationToken);
+                        }
                     }
                 }
             }
@@ -201,32 +235,55 @@ namespace WachuMakeyMaking.Services
             var negativeBranches = new Stack<Branch>(previousResult.Branches.Reverse());
             negativeBranches.Push(negativeBranch);
 
-            var negativeResult = Solve(problem, negativeBranches, cancellationToken);
-            if (negativeResult.State == State.Optimal)
+            string negativeBranchKey = GetBranchKey(negativeBranches);
+            string negConstraintKey = $"{branchVar.index}_lb_{ceilVal}";
+            if (!infeasibleBranches.Contains(negativeBranchKey))
             {
-                // Verify the solution satisfies the branch constraint
-                bool feasible = negativeResult.Values[branchVar.index] >= ceilVal - 1e-10;
-                if (!feasible)
+                var negativeResult = Solve(problem, negativeBranches, cancellationToken);
+                if (negativeResult.State == State.Optimal)
                 {
-                    this.log($"Branch constraint violated: x[{branchVar.index}] = {negativeResult.Values[branchVar.index]} < {ceilVal}, skipping");
-                }
-                else
-                {
-                    // Only explore further if this could be better than current best
-                    if (this.currentBest == null || negativeResult.OptimalValue < this.currentBest.OptimalValue)
+                    // Verify the solution satisfies the branch constraint
+                    bool feasible = negativeResult.Values[branchVar.index] >= ceilVal - 1e-10;
+                    if (!feasible)
                     {
-                        if (this.currentBest != null)
+                        this.log($"Branch constraint violated: x[{branchVar.index}] = {negativeResult.Values[branchVar.index]} < {ceilVal}, marking as infeasible");
+                        infeasibleBranches.Add(negativeBranchKey);
+
+                        // Track constraint-level violations
+                        if (!constraintViolationCount.ContainsKey(negConstraintKey))
+                            constraintViolationCount[negConstraintKey] = 0;
+                        constraintViolationCount[negConstraintKey]++;
+
+                        if (constraintViolationCount[negConstraintKey] >= 3)
                         {
-                            var message = $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
-                            this.progressMessage = message;
-                            UpdateProgress(State.Optimising, message, this.currentBest);
+                            this.log($"Constraint x[{branchVar.index}] >= {ceilVal} violated {constraintViolationCount[negConstraintKey]} times, treating as permanently infeasible");
                         }
-                        BranchAndBound(problem, negativeResult, cancellationToken);
+                    }
+                    else
+                    {
+                        // Only explore further if this could be better than current best
+                        if (this.currentBest == null || negativeResult.OptimalValue < this.currentBest.OptimalValue)
+                        {
+                            if (this.currentBest != null)
+                            {
+                                var message = $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
+                                this.progressMessage = message;
+                                UpdateProgress(State.Optimising, message, this.currentBest);
+                            }
+                            BranchAndBound(problem, negativeResult, cancellationToken);
+                        }
                     }
                 }
             }
 
             return false;
+        }
+
+        private string GetBranchKey(Stack<Branch> branches)
+        {
+            // Create a unique key for this branch configuration
+            var sortedBranches = branches.OrderBy(b => b.Index).ThenBy(b => b.Value).ToList();
+            return string.Join("|", sortedBranches.Select(b => $"{b.Index}_{b.Value}_{b.IsPositive}"));
         }
 
         private Solution Solve(Problem problem, Stack<Branch> branches, CancellationToken cancellationToken)
@@ -406,8 +463,16 @@ namespace WachuMakeyMaking.Services
                     return ("optimal", x, optimalValue, basis);
                 }
 
-                // Choose entering variable (most negative reduced cost)
-                int enteringVar = Array.IndexOf(reducedCosts, minReducedCost);
+                // Choose entering variable (most negative reduced cost) - use Bland's rule for ties
+                int enteringVar = -1;
+                for (int j = 0; j < n + m; j++)
+                {
+                    if (reducedCosts[j] < minReducedCost - 1e-10 ||
+                        (Math.Abs(reducedCosts[j] - minReducedCost) < 1e-10 && enteringVar == -1))
+                    {
+                        enteringVar = j;
+                    }
+                }
 
                 // Get entering column
                 double[] A_entering = new double[m];
@@ -436,7 +501,8 @@ namespace WachuMakeyMaking.Services
                     if (d[i] > 1e-10)
                     {
                         double ratio = x[basis[i]] / d[i];
-                        if (ratio < minRatio)
+                        if (ratio < minRatio - 1e-10 ||
+                            (Math.Abs(ratio - minRatio) < 1e-10 && leavingVar == -1))
                         {
                             minRatio = ratio;
                             leavingVar = i;
@@ -529,9 +595,9 @@ namespace WachuMakeyMaking.Services
         }
     }
 
-    public record Problem (int[][] Assignments, double[] Costs, int[] Constraints);
+    public record Problem(int[][] Assignments, double[] Costs, int[] Constraints);
 
-    public record Solution (
+    public record Solution(
         List<double> Values,
         double OptimalValue,
         SolverService.State State,
@@ -575,5 +641,5 @@ namespace WachuMakeyMaking.Services
         }
     }
 
-    public record Branch (int Index, int Value, bool IsPositive);
+    public record Branch(int Index, int Value, bool IsPositive);
 }
