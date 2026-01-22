@@ -230,50 +230,96 @@ public class MainWindow : Window, IDisposable
         var selectedItems = allDisplayResources.Where(r => resourceSelections.GetValueOrDefault(r.Id, false)).ToList();
         ImGui.Text($"{allDisplayResources.Length} resources found with recipes ({selectedItems.Count} selected)");
 
-
-        // Column headers
         ImGuiHelpers.ScaledDummy(10.0f);
-        ImGui.Text("Quantity");
-        ImGui.SameLine(110.0f); // Position after the fixed-width textbox
-        ImGui.Text("Resource");
 
-        // Normally a BeginChild() would have to be followed by an unconditional EndChild(),
-        // ImRaii takes care of this after the scope ends.
-        // This works for all ImGui functions that require specific handling, examples are BeginTable() or Indent().
-        using (var child = ImRaii.Child("ResourcesChildWithAScrollbar", Vector2.Zero, true))
+        // Prepare toggle state / counts used by header checkbox
+        var totalResources = allDisplayResources.Length;
+        var selectedCount = allDisplayResources.Count(r => resourceSelections.GetValueOrDefault(r.Id, false));
+        bool allSelected = selectedCount == totalResources && totalResources > 0;
+        bool someSelected = selectedCount > 0 && selectedCount < totalResources;
+        bool noneSelected = selectedCount == 0;
+
+        // Wrap table in a child to keep scrollbars (preserves original scrolling behaviour)
+        using (var child = ImRaii.Child("ResourcesTableChild", Vector2.Zero, true))
         {
-            // Check if this child is drawing
-            if (child.Success)
-            {
+            if (!child.Success) return;
 
+            var tableFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.ScrollY;
+            if (ImGui.BeginTable("ResourcesTable", 3, tableFlags))
+            {
+                // Column widths: fixed for quantity and checkbox, stretch for resource name
+                ImGui.TableSetupColumn("Quantity", ImGuiTableColumnFlags.WidthFixed, 80.0f);
+                ImGui.TableSetupColumn("Select", ImGuiTableColumnFlags.WidthFixed, 36.0f);
+                ImGui.TableSetupColumn("Resource", ImGuiTableColumnFlags.WidthStretch);
+
+                // Custom header row so we can put the toggle-all checkbox into the middle column
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                ImGui.Text("Quantity");
+
+                ImGui.TableSetColumnIndex(1);
+                var headerToggle = allSelected;
+                if (ImGui.Checkbox("##toggleAllResources", ref headerToggle))
+                {
+                    // Clicking when intermediate or empty selects all; clicking when all deselects all
+                    if (someSelected || noneSelected)
+                    {
+                        foreach (var resource in allDisplayResources)
+                            resourceSelections[resource.Id] = true;
+                    }
+                    else
+                    {
+                        foreach (var resource in allDisplayResources)
+                            resourceSelections[resource.Id] = false;
+                    }
+                }
+
+                // Draw intermediate indicator if needed (horizontal line inside the checkbox cell)
+                if (someSelected)
+                {
+                    var checkboxPos = ImGui.GetItemRectMin();
+                    var checkboxSize = ImGui.GetItemRectSize();
+                    var drawList = ImGui.GetWindowDrawList();
+                    var center = new Vector2(checkboxPos.X + checkboxSize.X * 0.5f, checkboxPos.Y + checkboxSize.Y * 0.5f);
+                    var lineLength = checkboxSize.X * 0.3f;
+                    drawList.AddLine(
+                        new Vector2(center.X - lineLength, center.Y),
+                        new Vector2(center.X + lineLength, center.Y),
+                        ImGui.GetColorU32(ImGuiCol.Text),
+                        checkboxSize.Y * 0.6f
+                    );
+                }
+
+                ImGui.TableSetColumnIndex(2);
+                ImGui.Text("Resource");
+
+                // Rows
                 foreach (var resourceItem in allDisplayResources.OrderBy(r => r.Item.Name.ToString()))
                 {
                     var resourceId = resourceItem.Id;
                     var isSelected = resourceSelections.GetValueOrDefault(resourceId, true);
-
                     var quantity = GetResourceQuantity(resourceItem);
 
-                    // Editable quantity textbox (fixed width)
-                    ImGui.SetNextItemWidth(55.0f); // Fixed width for the textbox
+                    ImGui.TableNextRow();
+
+                    // Quantity column
+                    ImGui.TableSetColumnIndex(0);
+                    ImGui.SetNextItemWidth(55.0f);
                     if (ImGui.InputInt($"##quantity_{resourceId}", ref quantity))
                     {
-                        // Clamp to valid range (0 to 999999)
                         resourceQuantityOverrides[resourceId] = Math.Min(Math.Max(quantity, 0), 999999);
                     }
 
-                    ImGui.SameLine();
-
-                    // Checkbox
-                    if (ImGui.Checkbox($"##{resourceId}", ref isSelected))
+                    // Checkbox column
+                    ImGui.TableSetColumnIndex(1);
+                    if (ImGui.Checkbox($"##sel_{resourceId}", ref isSelected))
                     {
                         resourceSelections[resourceId] = isSelected;
                     }
 
-                    ImGui.SameLine();
-
-                    // Item icon
+                    // Resource column (icon + name)
+                    ImGui.TableSetColumnIndex(2);
                     DrawnIcon(resourceItem.Id);
-
                     var displayName = resourceItem.Item.Name;
                     if (inventoryDict.TryGetValue(resourceItem.Item, out var originalItemStack))
                     {
@@ -281,6 +327,8 @@ public class MainWindow : Window, IDisposable
                     }
                     ImGui.Text(displayName);
                 }
+
+                ImGui.EndTable();
             }
         }
     }
