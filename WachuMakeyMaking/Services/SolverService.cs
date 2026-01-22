@@ -207,7 +207,7 @@ namespace WachuMakeyMaking.Services
                     {
                         if (this.currentBest != null)
                         {
-                            var message = $"Optimising... Current best: {Math.Floor(this.currentBest.OptimalValue)} gil Lower bound: {Math.Floor(this.lowerBound)}";
+                            var message = $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
                             this.progressMessage = message;
                             UpdateProgress(State.Optimising, message, this.currentBest);
                         }
@@ -237,7 +237,7 @@ namespace WachuMakeyMaking.Services
                     {
                         if (this.currentBest != null)
                         {
-                            var message = $"Optimising... Current best: {Math.Floor(this.currentBest.OptimalValue)} gil Lower bound: {Math.Floor(this.lowerBound)}";
+                            var message = $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
                             this.progressMessage = message;
                             UpdateProgress(State.Optimising, message, this.currentBest);
                         }

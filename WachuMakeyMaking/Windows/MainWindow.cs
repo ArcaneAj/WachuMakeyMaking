@@ -131,7 +131,7 @@ public class MainWindow : Window, IDisposable
         // Combine cached and manual resources for display
         allDisplayResources = [.. actualItems.Concat(actualCrystals).Where(x => allIngredients.Contains(x.Item))];
         inventoryDict = allDisplayResources.ToDictionary(x => x.Item, x => x);
-        recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
+        ResetResourceOverrides();
     }
 
     private void ResetSolver()
@@ -153,7 +153,7 @@ public class MainWindow : Window, IDisposable
     private void ResetResourceOverrides()
     {
         resourceQuantityOverrides.Clear();
-        resourceSelections.Clear();
+        resourceSelections = allDisplayResources.ToDictionary(x => x.Id, x => true);
         ResetSolver();
         recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
         ResetRecipeOverrides();
@@ -239,8 +239,9 @@ public class MainWindow : Window, IDisposable
         bool someSelected = selectedCount > 0 && selectedCount < totalResources;
         bool noneSelected = selectedCount == 0;
 
-        // Wrap table in a child to keep scrollbars (preserves original scrolling behaviour)
-        using (var child = ImRaii.Child("ResourcesTableChild", Vector2.Zero, true))
+        // Reserve the remaining content height for the child so the table can scroll independently.
+        var avail = ImGui.GetContentRegionAvail();
+        using (var child = ImRaii.Child("ResourcesTableChild", new Vector2(-1.0f, avail.Y), true))
         {
             if (!child.Success) return;
 
@@ -249,20 +250,22 @@ public class MainWindow : Window, IDisposable
             {
                 // Column widths: fixed for quantity and checkbox, stretch for resource name
                 ImGui.TableSetupColumn("Quantity", ImGuiTableColumnFlags.WidthFixed, 80.0f);
-                ImGui.TableSetupColumn("Select", ImGuiTableColumnFlags.WidthFixed, 36.0f);
+                ImGui.TableSetupColumn("Select", ImGuiTableColumnFlags.WidthFixed, 22.0f);
                 ImGui.TableSetupColumn("Resource", ImGuiTableColumnFlags.WidthStretch);
 
-                // Custom header row so we can put the toggle-all checkbox into the middle column
-                ImGui.TableNextRow();
+                // Freeze the header row so it doesn't scroll with the body
+                ImGui.TableSetupScrollFreeze(0, 1);
+
+                // Header row (frozen)
+                ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
                 ImGui.TableSetColumnIndex(0);
                 ImGui.Text("Quantity");
-
                 ImGui.TableSetColumnIndex(1);
                 var headerToggle = allSelected;
                 if (ImGui.Checkbox("##toggleAllResources", ref headerToggle))
                 {
-                    // Clicking when intermediate or empty selects all; clicking when all deselects all
-                    if (someSelected || noneSelected)
+                    // Preserve previous semantics: clicking when intermediate or empty selects all.
+                    if (headerToggle)
                     {
                         foreach (var resource in allDisplayResources)
                             resourceSelections[resource.Id] = true;
@@ -293,7 +296,7 @@ public class MainWindow : Window, IDisposable
                 ImGui.TableSetColumnIndex(2);
                 ImGui.Text("Resource");
 
-                // Rows
+                // Rows (table body will scroll; header row is frozen)
                 foreach (var resourceItem in allDisplayResources.OrderBy(r => r.Item.Name.ToString()))
                 {
                     var resourceId = resourceItem.Id;
@@ -304,7 +307,7 @@ public class MainWindow : Window, IDisposable
 
                     // Quantity column
                     ImGui.TableSetColumnIndex(0);
-                    ImGui.SetNextItemWidth(55.0f);
+                    ImGui.SetNextItemWidth(80.0f);
                     if (ImGui.InputInt($"##quantity_{resourceId}", ref quantity))
                     {
                         resourceQuantityOverrides[resourceId] = Math.Min(Math.Max(quantity, 0), 999999);
@@ -417,12 +420,12 @@ public class MainWindow : Window, IDisposable
         ImGui.SameLine();
 
         var selectedRecipes = cachedRecipes.Where(r => recipeSelections.GetValueOrDefault(r.Item.Name.ToString(), false)).ToList();
-        
+
         if (selectedRecipes.Count == 0)
         {
             ImGui.BeginDisabled();
         }
-        
+
         if (ImGui.Button("Solve"))
         {
             // We slight wiggle the costs in order to prefer one over the other to avoid degeneracy
@@ -434,9 +437,9 @@ public class MainWindow : Window, IDisposable
             Task.Run(() => solverService.Solve(
                 recipes,
                 ApplyOverrides(allDisplayResources)
-                ));
+            ));
         }
-        
+
         if (selectedRecipes.Count == 0)
         {
             ImGui.EndDisabled();
@@ -478,78 +481,77 @@ public class MainWindow : Window, IDisposable
                 }
             }
 
-            // Column headers
-            ImGuiHelpers.ScaledDummy(10.0f);
-            ImGui.Text("Value");
-            ImGui.SameLine(85.0f); // Position after the fixed-width textbox
-            
-            // Toggle all checkbox
+            // Prepare toggle state / counts used by header checkbox
             var totalRecipes = cachedRecipes.Count;
             var selectedCount = cachedRecipes.Count(r => recipeSelections.GetValueOrDefault(r.Item.Name.ToString(), false));
             bool allSelected = selectedCount == totalRecipes && totalRecipes > 0;
             bool someSelected = selectedCount > 0 && selectedCount < totalRecipes;
             bool noneSelected = selectedCount == 0;
-            
-            // For intermediate state, show as empty (unchecked) with a line overlay
-            // For empty state, show as unchecked
-            // For full state, show as checked
-            bool toggleState = allSelected; // Only true when all are selected, false otherwise (including intermediate)
-            
-            // Store the state before the checkbox potentially changes it
-            bool wasAllSelected = allSelected;
-            bool wasSomeSelected = someSelected;
-            
-            if (ImGui.Checkbox("##toggleAll", ref toggleState))
-            {
-                // If clicking when intermediate or empty, select all
-                if (wasSomeSelected || noneSelected)
-                {
-                    foreach (var recipe in cachedRecipes)
-                    {
-                        recipeSelections[recipe.Item.Name.ToString()] = true;
-                    }
-                }
-                // If clicking when all selected, deselect all
-                else if (wasAllSelected)
-                {
-                    foreach (var recipe in cachedRecipes)
-                    {
-                        recipeSelections[recipe.Item.Name.ToString()] = false;
-                    }
-                }
-            }
-            
-            // Draw intermediate indicator if needed (overlay a line to indicate partial selection)
-            if (wasSomeSelected)
-            {
-                var checkboxPos = ImGui.GetItemRectMin();
-                var checkboxSize = ImGui.GetItemRectSize();
-                var drawList = ImGui.GetWindowDrawList();
-                // Draw a horizontal line through the checkbox to indicate intermediate state
-                var center = new Vector2(checkboxPos.X + checkboxSize.X * 0.5f, checkboxPos.Y + checkboxSize.Y * 0.5f);
-                var lineLength = checkboxSize.X * 0.3f;
-                drawList.AddLine(
-                    new Vector2(center.X - lineLength, center.Y),
-                    new Vector2(center.X + lineLength, center.Y),
-                    ImGui.GetColorU32(ImGuiCol.Text),
-                    checkboxSize.Y * 0.6f
-                );
-            }
-            
-            ImGui.SameLine(110.0f); // Position after the checkbox
-            ImGui.Text("Recipe");
-        }
 
-        // Normally a BeginChild() would have to be followed by an unconditional EndChild(),
-        // ImRaii takes care of this after the scope ends.
-        // This works for all ImGui functions that require specific handling, examples are BeginTable() or Indent().
-        using (var child = ImRaii.Child("SomeChildWithAScrollbar", Vector2.Zero, true))
-        {
-            // Check if this child is drawing
-            if (child.Success)
+            // Reserve the remaining content height so the table can scroll independently and freeze the header
+            var avail = ImGui.GetContentRegionAvail();
+            using (var child = ImRaii.Child("RecipesTableChild", new Vector2(-1.0f, avail.Y), true))
             {
-                if (cachedRecipes.Count > 0)
+                if (!child.Success) return;
+
+                var tableFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.ScrollY;
+                if (ImGui.BeginTable("RecipesTable", 3, tableFlags))
                 {
+                    // Column widths: fixed for value and checkbox, stretch for recipe name
+                    ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthFixed, 80.0f);
+                    ImGui.TableSetupColumn("Select", ImGuiTableColumnFlags.WidthFixed, 22.0f);
+                    ImGui.TableSetupColumn("Recipe", ImGuiTableColumnFlags.WidthStretch);
+
+                    // Freeze header row (columns, rows)
+                    ImGui.TableSetupScrollFreeze(0, 1);
+
+                    // Header row (frozen)
+                    ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+                    ImGui.TableSetColumnIndex(0);
+                    ImGui.Text("Value");
+
+                    ImGui.TableSetColumnIndex(1);
+                    var headerToggle = allSelected;
+                    if (ImGui.Checkbox("##toggleAllRecipes", ref headerToggle))
+                    {
+                        // If clicking when intermediate or empty, select all
+                        if (someSelected || noneSelected)
+                        {
+                            foreach (var recipe in cachedRecipes)
+                            {
+                                recipeSelections[recipe.Item.Name.ToString()] = true;
+                            }
+                        }
+                        // If clicking when all selected, deselect all
+                        else
+                        {
+                            foreach (var recipe in cachedRecipes)
+                            {
+                                recipeSelections[recipe.Item.Name.ToString()] = false;
+                            }
+                        }
+                    }
+
+                    // Draw intermediate indicator if needed (overlay a line to indicate partial selection)
+                    if (someSelected)
+                    {
+                        var checkboxPos = ImGui.GetItemRectMin();
+                        var checkboxSize = ImGui.GetItemRectSize();
+                        var drawList = ImGui.GetWindowDrawList();
+                        var center = new Vector2(checkboxPos.X + checkboxSize.X * 0.5f, checkboxPos.Y + checkboxSize.Y * 0.5f);
+                        var lineLength = checkboxSize.X * 0.3f;
+                        drawList.AddLine(
+                            new Vector2(center.X - lineLength, center.Y),
+                            new Vector2(center.X + lineLength, center.Y),
+                            ImGui.GetColorU32(ImGuiCol.Text),
+                            checkboxSize.Y * 0.6f
+                        );
+                    }
+
+                    ImGui.TableSetColumnIndex(2);
+                    ImGui.Text("Recipe");
+
+                    // Rows (table body will scroll; header is frozen)
                     foreach (var recipe in cachedRecipes.OrderBy(r => r.Item.Name.ToString()))
                     {
                         var recipeKey = recipe.Item.Name.ToString();
@@ -558,28 +560,31 @@ public class MainWindow : Window, IDisposable
                         // Get the displayed value (use override if exists, otherwise calculated)
                         var value = GetRecipeValue(recipe);
 
-                        // Editable value textbox (fixed width)
-                        ImGui.SetNextItemWidth(80.0f); // Fixed width for the textbox
+                        ImGui.TableNextRow();
+
+                        // Value column
+                        ImGui.TableSetColumnIndex(0);
+                        ImGui.SetNextItemWidth(80.0f);
                         if (ImGui.InputInt($"##value_{recipeKey}", ref value))
                         {
                             // Clamp to valid range (0-999999)
                             recipeValueOverrides[recipeKey] = Math.Min(Math.Max(value, 0), 999999);
                         }
 
-                        ImGui.SameLine();
-
-                        // Checkbox
+                        // Checkbox column
+                        ImGui.TableSetColumnIndex(1);
                         if (ImGui.Checkbox($"##{recipeKey}", ref isSelected))
                         {
                             recipeSelections[recipeKey] = isSelected;
                         }
-                        ImGui.SameLine();
 
-                        // Item icon
+                        // Recipe column (icon + name)
+                        ImGui.TableSetColumnIndex(2);
                         DrawnIcon(recipe.Item.RowId);
-
                         ImGui.Text($"{recipe.Item.Name}");
                     }
+
+                    ImGui.EndTable();
                 }
             }
         }
@@ -614,71 +619,67 @@ public class MainWindow : Window, IDisposable
 
     private void DrawResultsTab()
     {
-        using (var child = ImRaii.Child("ResultsChildWithAScrollbar", Vector2.Zero, true))
+        if (solverState == SolverService.State.Idle)
         {
-            if (child.Success)
+            ImGui.Text("No solution computed yet. Go to the Recipes tab and click 'Solve' to start.");
+            return;
+        }
+
+        // Display current state
+        ImGui.Text($"Status: {solverProgressMessage}");
+
+        if (solverState == SolverService.State.FindingInitialSolution)
+        {
+            ImGui.Text("Finding initial solution...");
+        }
+        else if (solverState == SolverService.State.Optimising)
+        {
+            ImGui.Text("Optimising...");
+            if (currentSolution != null)
             {
-                if (solverState == SolverService.State.Idle)
-                {
-                    ImGui.Text("No solution computed yet. Go to the Recipes tab and click 'Solve' to start.");
-                    return;
-                }
+                ImGui.Text($"Current best value: {-Math.Floor(currentSolution.OptimalValue)} gil");
+            }
+        }
+        else if (solverState == SolverService.State.Finished && currentSolution != null)
+        {
+            ImGuiHelpers.ScaledDummy(10.0f);
+            ImGui.Text($"Total value: {-Math.Floor(currentSolution.OptimalValue)} gil");
+            ImGuiHelpers.ScaledDummy(5.0f);
 
-                // Display current state
-                ImGui.Text($"Status: {solverProgressMessage}");
+            // Reserve the remaining content height so the table can scroll independently and freeze the header
+            var avail = ImGui.GetContentRegionAvail();
+            using (var child = ImRaii.Child("RecipesTableChild", new Vector2(-1.0f, avail.Y), true))
+            {
+                if (!child.Success) return;
+                var tableFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.ScrollY;
+                // Display solution as a table
+                if (ImGui.BeginTable("SolutionTable", 2, tableFlags))
+                {
+                    ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableSetupColumn("Quantity", ImGuiTableColumnFlags.WidthFixed, 100.0f);
+                    ImGui.TableHeadersRow();
 
-                if (solverState == SolverService.State.FindingInitialSolution)
-                {
-                    ImGui.Text("Finding initial solution...");
-                }
-                else if (solverState == SolverService.State.Optimising)
-                {
-                    ImGui.Text("Optimising...");
-                    if (currentSolution != null)
+                    for (int i = 0; i < currentRecipes.Count && i < currentSolution.Values.Count; i++)
                     {
-                        ImGui.Text($"Current best value: {Math.Floor(currentSolution.OptimalValue)} gil");
-                    }
-                }
-                else if (solverState == SolverService.State.Finished && currentSolution != null)
-                {
-                    ImGuiHelpers.ScaledDummy(10.0f);
-                    ImGui.Text("Finished");
-                    ImGui.Separator();
-                    ImGuiHelpers.ScaledDummy(5.0f);
-
-                    // Display solution as a table
-                    if (ImGui.BeginTable("SolutionTable", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
-                    {
-                        ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
-                        ImGui.TableSetupColumn("Quantity", ImGuiTableColumnFlags.WidthFixed, 100.0f);
-                        ImGui.TableHeadersRow();
-
-                        for (int i = 0; i < currentRecipes.Count && i < currentSolution.Values.Count; i++)
+                        var quantity = (int)Math.Round(currentSolution.Values[i]);
+                        if (quantity > 0)
                         {
-                            var quantity = (int)Math.Round(currentSolution.Values[i]);
-                            if (quantity > 0)
-                            {
-                                ImGui.TableNextRow();
-                                ImGui.TableSetColumnIndex(0);
-                                DrawnIcon(currentRecipes[i].Item.RowId);
-                                ImGui.Text(currentRecipes[i].Item.Name);
-                                ImGui.TableSetColumnIndex(1);
-                                ImGui.Text(quantity.ToString());
-                            }
+                            ImGui.TableNextRow();
+                            ImGui.TableSetColumnIndex(0);
+                            DrawnIcon(currentRecipes[i].Item.RowId);
+                            ImGui.Text(currentRecipes[i].Item.Name);
+                            ImGui.TableSetColumnIndex(1);
+                            ImGui.Text(quantity.ToString());
                         }
-
-                        ImGui.EndTable();
                     }
 
-                    ImGuiHelpers.ScaledDummy(10.0f);
-                    ImGui.Separator();
-                    ImGui.Text($"Total value: {Math.Floor(currentSolution.OptimalValue)} gil");
-                }
-                else if (solverState == SolverService.State.Error || solverState == SolverService.State.Unbounded)
-                {
-                    ImGui.TextColored(new Vector4(1.0f, 0.0f, 0.0f, 1.0f), $"Error: {solverProgressMessage}");
+                    ImGui.EndTable();
                 }
             }
+        }
+        else if (solverState == SolverService.State.Error || solverState == SolverService.State.Unbounded)
+        {
+            ImGui.TextColored(new Vector4(1.0f, 0.0f, 0.0f, 1.0f), $"Error: {solverProgressMessage}");
         }
     }
 
