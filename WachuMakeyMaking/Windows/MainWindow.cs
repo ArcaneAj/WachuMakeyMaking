@@ -52,6 +52,9 @@ public class MainWindow : Window, IDisposable
     private bool shouldSwitchToResultsTab = false;
     private bool shouldSwitchToRecipesTab = false;
 
+    // UI state for adding a resource
+    private int resourceAddSelectedIndex = 0;
+
     public MainWindow(Plugin plugin, RecipeCacheService recipeCacheService, SolverService solverService)
         : base($"{Plugin.Name}?##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
@@ -82,12 +85,6 @@ public class MainWindow : Window, IDisposable
 
     private void OnInventoryChanged(IReadOnlyCollection<InventoryEventArgs> events)
     {
-        // Get actual inventory quantities before overrides
-        var actualCrystals = recipeCacheService.GetCrystals();
-        var actualItems = recipeCacheService.GetConsolidatedItems();
-        // Combine cached and manual resources for display
-        allDisplayResources = [.. actualItems.Concat(actualCrystals).Where(x => allIngredients.Contains(x.Item))];
-        inventoryDict = allDisplayResources.ToDictionary(x => x.Item, x => x);
         ResetResourceOverrides();
     }
 
@@ -109,6 +106,10 @@ public class MainWindow : Window, IDisposable
 
     private void ResetResourceOverrides()
     {
+        var actualCrystals = recipeCacheService.GetCrystals();
+        var actualItems = recipeCacheService.GetConsolidatedItems();
+        allDisplayResources = [.. actualItems.Concat(actualCrystals).Where(x => allIngredients.Contains(x.Item))];
+        inventoryDict = allDisplayResources.ToDictionary(x => x.Item, x => x);
         resourceQuantityOverrides.Clear();
         resourceSelections = allDisplayResources.ToDictionary(x => x.Id, x => true);
         ResetSolver();
@@ -191,8 +192,77 @@ public class MainWindow : Window, IDisposable
 
         ImGui.SameLine();
 
-        var selectedItems = allDisplayResources.Where(r => resourceSelections.GetValueOrDefault(r.Id, false)).ToList();
-        ImGui.Text($"{allDisplayResources.Length} resources found with recipes ({selectedItems.Count} selected)");
+        var selectedItems = allDisplayResources.Count(r => resourceSelections.GetValueOrDefault(r.Id, false));
+        ImGui.Text($"{allDisplayResources.Length} resources found with recipes ({selectedItems} selected)");
+
+        ImGuiHelpers.ScaledDummy(10.0f);
+
+        var presentItems = new HashSet<uint>(allDisplayResources?.Select(x => x.Id) ?? Enumerable.Empty<uint>());
+        var candidates = allIngredients
+            .Where(x => !presentItems.Contains(x.RowId))
+            .OrderBy(x => x.Name)
+            .ToList();
+
+        if (candidates.Count > 0)
+        {
+            // Current display name for combo
+            var currentName = (resourceAddSelectedIndex >= 0 && resourceAddSelectedIndex < candidates.Count)
+                ? candidates[resourceAddSelectedIndex].Name
+                : "Select...";
+
+            ImGui.Text("Add resource:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(250.0f);
+
+            // BeginCombo -> inside it create a fixed-height child so the popup is constrained (100 px)
+            if (ImGui.BeginCombo("##add_resource_combo", currentName, ImGuiComboFlags.None))
+            {
+                // Child with fixed height provides scrollable area that starts under the combo
+                ImGui.BeginChild("##add_resource_list", new Vector2(0, 100), false, ImGuiWindowFlags.AlwaysUseWindowPadding);
+
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    var name = candidates[i].Name;
+                    var selected = (i == resourceAddSelectedIndex);
+                    if (ImGui.Selectable(name, selected))
+                    {
+                        resourceAddSelectedIndex = i;
+                    }
+                    if (selected)
+                    {
+                        ImGui.SetItemDefaultFocus();
+                    }
+                }
+
+                ImGui.EndChild();
+                ImGui.EndCombo();
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Add"))
+            {
+                var chosen = candidates[Math.Max(0, Math.Min(resourceAddSelectedIndex, candidates.Count - 1))];
+
+                // Default to quantity 0 (user can edit after adding)
+                var list = new List<ModItemStack>(allDisplayResources ?? Array.Empty<ModItemStack>())
+                {
+                    new ModItemStack(chosen, chosen.RowId, 0)
+                };
+                allDisplayResources = [.. list];
+
+                // Ensure selection and quantity state exists
+                resourceSelections[chosen.RowId] = true;
+                resourceQuantityOverrides[chosen.RowId] = 0;
+
+                // Update inventory lookup and refresh cache using existing override logic
+                inventoryDict = allDisplayResources.ToDictionary(x => x.Item, x => x);
+                recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
+            }
+        }
+        else
+        {
+            ImGui.TextDisabled("No additional candidate resources available to add");
+        }
 
         ImGuiHelpers.ScaledDummy(10.0f);
 
