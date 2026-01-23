@@ -1,12 +1,11 @@
 using Dalamud.Game.Inventory;
-using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Lumina.Excel.Sheets;
-using WachuMakeyMaking.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Utils;
 
 namespace WachuMakeyMaking.Services;
@@ -147,8 +146,7 @@ public class RecipeCacheService
 
                         // Create the recipe with value
                         var recipeWithValue = new ModRecipeWithValue(
-                            recipe.Item,
-                            recipe.Ingredients,
+                            recipe,
                             marketValue,
                             gil
                         );
@@ -180,7 +178,7 @@ public class RecipeCacheService
                 {
                     // Check if this item is collectable
                     var (isCollectable, scripType, scripValue) = collectableService.GetCollectableInfo(item.Item);
-                    recipesWithValues.Add(new ModRecipeWithValue(item.Item, item.Ingredients, scripValue, scripType));
+                    recipesWithValues.Add(new ModRecipeWithValue(item, scripValue, scripType));
                 }
             }
 
@@ -284,7 +282,12 @@ public class RecipeCacheService
             Plugin.Log.Error($"Error getting recipe ingredients: {ex.Message}");
         }
 
-        return new ModRecipe(recipe.ItemResult.Value.ToMod(), ingredientsDict);
+        // Get recipe level info
+        var recipeLevelTable = Plugin.DataManager.GetExcelSheet<RecipeLevelTable>();
+        var recipeLevel = recipeLevelTable.GetRow(recipe.RecipeLevelTable.RowId);
+
+        // offset of 8 is because 0-7 are the base combat classes in the ClassJob sheet we use later, but craft type starts at 0 since it only contains crafting classes
+        return new ModRecipe(recipe.ItemResult.Value.ToMod(), ingredientsDict, recipeLevel.ClassJobLevel, recipe.CraftType.RowId + 8);
     }
 
     private bool CanCraftRecipe(ModRecipe recipe, Dictionary<uint, int> inventoryCounts)
@@ -307,6 +310,16 @@ public class RecipeCacheService
             }
         }
 
+        var classJobSheet = Plugin.DataManager.GetExcelSheet<ClassJob>();
+        var classJob = classJobSheet.GetRow(recipe.classJobId);
+
+        var playerLevel = Plugin.PlayerState.GetClassJobLevel(classJob);
+        if (playerLevel < recipe.classJobLevel)
+        {
+            Plugin.Log.Debug(GetItemName(recipe.Item.RowId) + " requires level " + recipe.classJobLevel + " " + classJob.Name.ToString() + ". Player level: " + playerLevel);
+            return false; // Player level too low
+        }
+
         return true; // Have enough of all ingredients
     }
 
@@ -318,6 +331,8 @@ public class RecipeCacheService
 
     public IEnumerable<ModRecipe> FindRecipes()
     {
-        return Plugin.DataManager.GetExcelSheet<Recipe>().Select(GetRecipeIngredients);
+        return Plugin.DataManager.GetExcelSheet<Recipe>()
+            .Where(x => x.ItemResult.Value.Name != string.Empty)
+            .Select(GetRecipeIngredients);
     }
 }
