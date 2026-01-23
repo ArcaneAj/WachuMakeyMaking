@@ -50,6 +50,7 @@ public class MainWindow : Window, IDisposable
     private string solverProgressMessage = string.Empty;
     private Solution? currentSolution = null;
     private List<ModRecipeWithValue> currentRecipes = [];
+    private List<ModRecipeWithValue> solverRecipes = [];
     private bool shouldSwitchToResultsTab = false;
     private bool shouldSwitchToRecipesTab = false;
 
@@ -406,7 +407,8 @@ public class MainWindow : Window, IDisposable
         if (ImGui.Button("Solve"))
         {
             // We slight wiggle the costs in order to prefer one over the other to avoid degeneracy
-            var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) * 1.001 * index }).ToList();
+            var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) * 1.001 * (index + 1) }).ToList();
+            solverRecipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) }).ToList(); ;
             currentRecipes = recipes;
             // Switch to Results tab
             shouldSwitchToResultsTab = true;
@@ -634,26 +636,29 @@ public class MainWindow : Window, IDisposable
                 if (ImGui.BeginTable("SolutionTable", 4, tableFlags))
                 {
                     ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
-                    ImGui.TableSetupColumn("Per Unit", ImGuiTableColumnFlags.WidthFixed, 100.0f);
                     ImGui.TableSetupColumn("Quantity", ImGuiTableColumnFlags.WidthFixed, 100.0f);
+                    ImGui.TableSetupColumn("Per Unit", ImGuiTableColumnFlags.WidthFixed, 100.0f);
                     ImGui.TableSetupColumn("Contribution", ImGuiTableColumnFlags.WidthFixed, 100.0f);
                     ImGui.TableHeadersRow();
 
-                    for (int i = 0; i < currentRecipes.Count && i < currentSolution.Values.Count; i++)
+                    // Undo the wiggling applied before solving to get original values
+                    for (int i = 0; i < solverRecipes.Count && i < currentSolution.Values.Count; i++)
                     {
                         var quantity = (int)Math.Round(currentSolution.Values[i]);
                         if (quantity > 0)
                         {
                             ImGui.TableNextRow();
                             ImGui.TableSetColumnIndex(0);
-                            DrawIcon(currentRecipes[i].Item.RowId, currentRecipes[i].Value);
-                            ImGui.Text(currentRecipes[i].Item.Name);
+                            DrawIcon(solverRecipes[i].Item.RowId, solverRecipes[i].Value);
+                            ImGui.Text(solverRecipes[i].Item.Name);
                             ImGui.TableSetColumnIndex(1);
-                            ImGui.Text(quantity.ToString());
+                            ImGui.Text((solverRecipes[i].Number * quantity).ToString());
+
+
                             ImGui.TableSetColumnIndex(2);
-                            ImGui.Text($"{(int)currentRecipes[i].Value}");
+                            ImGui.Text($"{(int)solverRecipes[i].Value}");
                             ImGui.TableSetColumnIndex(3);
-                            ImGui.Text($"{(int)currentRecipes[i].Value * quantity}");
+                            ImGui.Text($"{(int)solverRecipes[i].Value * solverRecipes[i].Number * quantity}");
                         }
                     }
 

@@ -288,7 +288,7 @@ public class RecipeCacheService
         var recipeLevel = recipeLevelTable.GetRow(recipe.RecipeLevelTable.RowId);
 
         // offset of 8 is because 0-7 are the base combat classes in the ClassJob sheet we use later, but craft type starts at 0 since it only contains crafting classes
-        return new ModRecipe(recipe.ItemResult.Value.ToMod(), ingredientsDict, recipeLevel.ClassJobLevel, recipe.CraftType.RowId + 8, recipe.SecretRecipeBook.RowId);
+        return new ModRecipe(recipe.RowId, recipe.ItemResult.Value.ToMod(), recipe.AmountResult, ingredientsDict, recipeLevel.ClassJobLevel, recipe.CraftType.RowId + 8, recipe.SecretRecipeBook.RowId);
     }
 
     private bool CanCraftRecipe(ModRecipe recipe, Dictionary<uint, int> inventoryCounts)

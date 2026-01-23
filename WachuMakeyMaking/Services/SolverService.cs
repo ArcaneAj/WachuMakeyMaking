@@ -79,7 +79,7 @@ namespace WachuMakeyMaking.Services
 
                 var usedResources = resources.Where(x => recipes.Any(y => y.Ingredients.ContainsKey(x.Item)));
 
-                var costs = recipes.Select(x => -x.Value).ToArray();
+                var costs = recipes.Select(x => -x.Value * x.Number).ToArray();
 
                 var constraintsList = new List<int>();
                 var assignmentsList = new List<int[]>();
