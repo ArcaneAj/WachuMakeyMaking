@@ -332,16 +332,30 @@ public class RecipeCacheService
         return true; // Have enough of all ingredients
     }
 
+    private readonly Dictionary<ModItem, List<ModRecipe>> ingredientCache = [];
     private List<ModRecipe> FindRecipesWithIngredient(ModItem item)
     {
+        if (!ingredientCache.TryGetValue(item, out var cachedRecipes))
+        {
+            var recipes = FindRecipes().Values.Where(x => x.Ingredients.ContainsKey(item)).ToList();
+            ingredientCache[item] = recipes;
+            return recipes;
+        }
 
-        return FindRecipes().Where(x => x.Ingredients.ContainsKey(item)).ToList();
+        return cachedRecipes;
     }
 
-    public IEnumerable<ModRecipe> FindRecipes()
+    private Dictionary<uint, ModRecipe>? recipeCache;
+    public Dictionary<uint, ModRecipe> FindRecipes()
     {
-        return Plugin.DataManager.GetExcelSheet<Recipe>()
-            .Where(x => x.ItemResult.Value.Name != string.Empty)
-            .Select(GetRecipeIngredients);
+        if (recipeCache == null)
+        {
+            recipeCache = Plugin.DataManager.GetExcelSheet<Recipe>()
+                .Where(x => x.ItemResult.Value.Name != string.Empty)
+                .Select(GetRecipeIngredients).ToDictionary(x => x.RowId, x => x);
+        }
+
+        return recipeCache;
+
     }
 }

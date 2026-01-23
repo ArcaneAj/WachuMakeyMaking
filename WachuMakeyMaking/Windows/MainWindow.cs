@@ -1,17 +1,15 @@
 using Dalamud.Bindings.ImGui;
-using Dalamud.Game.Inventory;
 using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Numerics;
-using System.Text;
 using System.Threading.Tasks;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
@@ -73,7 +71,7 @@ public class MainWindow : Window, IDisposable
         // Subscribe to inventory changes
         Plugin.GameInventory.InventoryChanged += OnInventoryChanged;
 
-        allIngredients = [.. recipeCacheService.FindRecipes().SelectMany(x => x.Ingredients.Keys)];
+        allIngredients = [.. recipeCacheService.FindRecipes().Values.SelectMany(x => x.Ingredients.Keys)];
     }
 
     public void Dispose()
@@ -333,6 +331,24 @@ public class MainWindow : Window, IDisposable
         }
     }
 
+    // Attempt to open the crafting log on the recipe for `itemId`.
+    // Implementation details differ between client versions — this helper:
+    // 1) finds the Recipe row for the given result item (if any)
+    // 2) calls into the game's UI/agent to open the recipe UI (placeholder)
+    // You must hook the exact agent/function from your FFXIVClientStructs version.
+    // If you don't have client structs available, you can leave this as a no-op or log.
+    private static void OpenRecipeInCraftingLog(uint recipeId)
+    {
+        // Find a recipe whose result item matches this itemId
+        var recipeSheet = Plugin.DataManager.GetExcelSheet<Recipe>();
+        var recipe = recipeSheet.GetRow(recipeId);
+        unsafe
+        {
+            AgentRecipeNote.Instance()->OpenRecipeByRecipeId(recipe.RowId);
+        }
+        Plugin.Log.Information($"Request to open crafting log for recipe {recipeId} (result item {recipe.ItemResult.Value.Name}). Implement game interop using FFXIVClientStructs to actually open it.");
+    }
+
     private ModItemStack[] ApplyOverrides(ModItemStack[] allDisplayResources)
     {
         var updated = new List<ModItemStack>();
@@ -561,7 +577,38 @@ public class MainWindow : Window, IDisposable
                         // Recipe column (icon + name)
                         ImGui.TableSetColumnIndex(2);
                         DrawIcon(recipe.Item.RowId);
+
+                        if (recipe.RowId > 0)
+                        {
+                            // Open the recipe in the crafting log when the icon is clicked
+                            if (ImGui.IsItemClicked())
+                            {
+                                try
+                                {
+                                    OpenRecipeInCraftingLog(recipe.RowId);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Plugin.Log.Error($"Failed to open crafting log for item {recipe.RowId}: {ex.Message}");
+                                }
+                            }
+                        }
                         ImGui.Text($"{recipe.Item.Name}");
+                        if (recipe.RowId > 0)
+                        {
+                            // Open the recipe in the crafting log when the icon is clicked
+                            if (ImGui.IsItemClicked())
+                            {
+                                try
+                                {
+                                    OpenRecipeInCraftingLog(recipe.RowId);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Plugin.Log.Error($"Failed to open crafting log for item {recipe.RowId}: {ex.Message}");
+                                }
+                            }
+                        }
                     }
 
                     ImGui.EndTable();
@@ -650,11 +697,39 @@ public class MainWindow : Window, IDisposable
                             ImGui.TableNextRow();
                             ImGui.TableSetColumnIndex(0);
                             DrawIcon(solverRecipes[i].Item.RowId, solverRecipes[i].Value);
+                            if (solverRecipes[i].RowId > 0)
+                            {
+                                // Open the recipe in the crafting log when the icon is clicked
+                                if (ImGui.IsItemClicked())
+                                {
+                                    try
+                                    {
+                                        OpenRecipeInCraftingLog(solverRecipes[i].RowId);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Plugin.Log.Error($"Failed to open crafting log for item {solverRecipes[i].RowId}: {ex.Message}");
+                                    }
+                                }
+                            }
                             ImGui.Text(solverRecipes[i].Item.Name);
+                            if (solverRecipes[i].RowId > 0)
+                            {
+                                // Open the recipe in the crafting log when the icon is clicked
+                                if (ImGui.IsItemClicked())
+                                {
+                                    try
+                                    {
+                                        OpenRecipeInCraftingLog(solverRecipes[i].RowId);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Plugin.Log.Error($"Failed to open crafting log for item {solverRecipes[i].RowId}: {ex.Message}");
+                                    }
+                                }
+                            }
                             ImGui.TableSetColumnIndex(1);
                             ImGui.Text((solverRecipes[i].Number * quantity).ToString());
-
-
                             ImGui.TableSetColumnIndex(2);
                             ImGui.Text($"{(int)solverRecipes[i].Value}");
                             ImGui.TableSetColumnIndex(3);
