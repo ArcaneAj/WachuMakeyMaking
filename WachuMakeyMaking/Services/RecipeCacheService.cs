@@ -1,4 +1,5 @@
 using Dalamud.Game.Inventory;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
@@ -287,7 +288,7 @@ public class RecipeCacheService
         var recipeLevel = recipeLevelTable.GetRow(recipe.RecipeLevelTable.RowId);
 
         // offset of 8 is because 0-7 are the base combat classes in the ClassJob sheet we use later, but craft type starts at 0 since it only contains crafting classes
-        return new ModRecipe(recipe.ItemResult.Value.ToMod(), ingredientsDict, recipeLevel.ClassJobLevel, recipe.CraftType.RowId + 8);
+        return new ModRecipe(recipe.ItemResult.Value.ToMod(), ingredientsDict, recipeLevel.ClassJobLevel, recipe.CraftType.RowId + 8, recipe.SecretRecipeBook.RowId);
     }
 
     private bool CanCraftRecipe(ModRecipe recipe, Dictionary<uint, int> inventoryCounts)
@@ -318,6 +319,14 @@ public class RecipeCacheService
         {
             Plugin.Log.Debug(GetItemName(recipe.Item.RowId) + " requires level " + recipe.classJobLevel + " " + classJob.Name.ToString() + ". Player level: " + playerLevel);
             return false; // Player level too low
+        }
+
+        if (recipe.book > 0)
+        {
+            unsafe
+            {
+                if (!PlayerState.Instance()->IsSecretRecipeBookUnlocked(recipe.book)) return false;
+            }
         }
 
         return true; // Have enough of all ingredients
