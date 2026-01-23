@@ -346,7 +346,6 @@ public class MainWindow : Window, IDisposable
         {
             AgentRecipeNote.Instance()->OpenRecipeByRecipeId(recipe.RowId);
         }
-        Plugin.Log.Information($"Request to open crafting log for recipe {recipeId} (result item {recipe.ItemResult.Value.Name}). Implement game interop using FFXIVClientStructs to actually open it.");
     }
 
     private ModItemStack[] ApplyOverrides(ModItemStack[] allDisplayResources)
@@ -574,39 +573,28 @@ public class MainWindow : Window, IDisposable
                             recipeSelections[recipeKey] = isSelected;
                         }
 
-                        // Recipe column (icon + name)
+                        // Recipe column (icon + name) — single click handler for entire cell
                         ImGui.TableSetColumnIndex(2);
-                        DrawIcon(recipe.Item.RowId);
 
-                        if (recipe.RowId > 0)
-                        {
-                            // Open the recipe in the crafting log when the icon is clicked
-                            if (ImGui.IsItemClicked())
-                            {
-                                try
-                                {
-                                    OpenRecipeInCraftingLog(recipe.RowId);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Plugin.Log.Error($"Failed to open crafting log for item {recipe.RowId}: {ex.Message}");
-                                }
-                            }
-                        }
+                        // start of clickable region: cursor screen pos before drawing cell contents
+                        var cellStart = ImGui.GetCursorScreenPos();
+
+                        DrawIcon(recipe.Item.RowId);
                         ImGui.Text($"{recipe.Item.Name}");
-                        if (recipe.RowId > 0)
+
+                        // end of clickable region: rect after last item
+                        var cellEnd = ImGui.GetItemRectMax();
+
+                        // single check: if the mouse was clicked inside the rectangle covering icon+text, open recipe
+                        if (recipe.RowId > 0 && ImGui.IsMouseClicked(0) && ImGui.IsMouseHoveringRect(cellStart, cellEnd, true))
                         {
-                            // Open the recipe in the crafting log when the icon is clicked
-                            if (ImGui.IsItemClicked())
+                            try
                             {
-                                try
-                                {
-                                    OpenRecipeInCraftingLog(recipe.RowId);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Plugin.Log.Error($"Failed to open crafting log for item {recipe.RowId}: {ex.Message}");
-                                }
+                                OpenRecipeInCraftingLog(recipe.RowId);
+                            }
+                            catch (Exception ex)
+                            {
+                                Plugin.Log.Error($"Failed to open crafting log for recipe {recipe.RowId}: {ex.Message}");
                             }
                         }
                     }
@@ -679,7 +667,7 @@ public class MainWindow : Window, IDisposable
             {
                 if (!child.Success) return;
                 var tableFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.ScrollY;
-                // Display solution as a table
+                // Display solution as a table with a single click handler for the whole cell
                 if (ImGui.BeginTable("SolutionTable", 4, tableFlags))
                 {
                     ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
@@ -696,38 +684,28 @@ public class MainWindow : Window, IDisposable
                         {
                             ImGui.TableNextRow();
                             ImGui.TableSetColumnIndex(0);
+
+                            // clickable region start
+                            var cellStart = ImGui.GetCursorScreenPos();
+
                             DrawIcon(solverRecipes[i].Item.RowId, solverRecipes[i].Value);
-                            if (solverRecipes[i].RowId > 0)
-                            {
-                                // Open the recipe in the crafting log when the icon is clicked
-                                if (ImGui.IsItemClicked())
-                                {
-                                    try
-                                    {
-                                        OpenRecipeInCraftingLog(solverRecipes[i].RowId);
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Plugin.Log.Error($"Failed to open crafting log for item {solverRecipes[i].RowId}: {ex.Message}");
-                                    }
-                                }
-                            }
                             ImGui.Text(solverRecipes[i].Item.Name);
-                            if (solverRecipes[i].RowId > 0)
+
+                            // clickable region end
+                            var cellEnd = ImGui.GetItemRectMax();
+
+                            if (solverRecipes[i].RowId > 0 && ImGui.IsMouseClicked(0) && ImGui.IsMouseHoveringRect(cellStart, cellEnd, true))
                             {
-                                // Open the recipe in the crafting log when the icon is clicked
-                                if (ImGui.IsItemClicked())
+                                try
                                 {
-                                    try
-                                    {
-                                        OpenRecipeInCraftingLog(solverRecipes[i].RowId);
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Plugin.Log.Error($"Failed to open crafting log for item {solverRecipes[i].RowId}: {ex.Message}");
-                                    }
+                                    OpenRecipeInCraftingLog(solverRecipes[i].RowId);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Plugin.Log.Error($"Failed to open crafting log for recipe {solverRecipes[i].RowId}: {ex.Message}");
                                 }
                             }
+
                             ImGui.TableSetColumnIndex(1);
                             ImGui.Text((solverRecipes[i].Number * quantity).ToString());
                             ImGui.TableSetColumnIndex(2);
