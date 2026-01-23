@@ -448,7 +448,7 @@ public class MainWindow : Window, IDisposable
         {
             var currencyGrouping = cachedRecipes.GroupBy(x => x.Currency.RowId).Where(x => x.Key != 1);
 
-            // Clean up currency values for currencies that are no longer present
+            // Clean up currency values for currencies that are no longer in cache
             var currentCurrencyIds = new HashSet<uint>(currencyGrouping.Select(g => g.Key));
             var currencyIdsToRemove = currencyValues.Keys.Where(id => !currentCurrencyIds.Contains(id)).ToList();
             foreach (var id in currencyIdsToRemove)
@@ -573,35 +573,148 @@ public class MainWindow : Window, IDisposable
                             recipeSelections[recipeKey] = isSelected;
                         }
 
-                        // Recipe column (icon + name) — single click handler for entire cell
+                        // Recipe column (icon + name) — single click handler for entire cell using an InvisibleButton
                         ImGui.TableSetColumnIndex(2);
 
-                        // start of clickable region: cursor screen pos before drawing cell contents
-                        var cellStart = ImGui.GetCursorScreenPos();
+                        // Reserve full available width for the column before drawing
+                        var fullWidth = ImGui.GetContentRegionAvail().X;
+                        var iconHeight = 20.0f * ImGui.GetIO().FontGlobalScale;
+                        var rowHeight = Math.Max(ImGui.GetFrameHeightWithSpacing(), iconHeight);
 
+                        // Create the invisible button that covers the whole cell
+                        ImGui.InvisibleButton($"cell_btn_recipe_{recipe.RowId}", new Vector2(fullWidth, rowHeight));
+                        if (ImGui.IsItemClicked())
+                        {
+                            if (recipe.RowId > 0)
+                            {
+                                try
+                                {
+                                    OpenRecipeInCraftingLog(recipe.RowId);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Plugin.Log.Error($"Failed to open crafting log for recipe {recipe.RowId}: {ex.Message}");
+                                }
+                            }
+                        }
+
+                        var btnMin = ImGui.GetItemRectMin();
+                        var padX = 4.0f;
+                        var iconY = btnMin.Y + (rowHeight - iconHeight) * 0.5f;
+
+                        ImGui.SetCursorScreenPos(new Vector2(btnMin.X + padX, iconY));
                         DrawIcon(recipe.Item.RowId);
                         ImGui.Text($"{recipe.Item.Name}");
 
-                        // end of clickable region: rect after last item
-                        var cellEnd = ImGui.GetItemRectMax();
+                        // Move cursor to the right edge of the invisible button so subsequent columns render correctly
+                        ImGui.SetCursorScreenPos(new Vector2(btnMin.X + fullWidth, btnMin.Y));
 
-                        // single check: if the mouse was clicked inside the rectangle covering icon+text, open recipe
-                        if (recipe.RowId > 0 && ImGui.IsMouseClicked(0) && ImGui.IsMouseHoveringRect(cellStart, cellEnd, true))
+                    }
+
+                    ImGui.EndTable();
+                }
+            }
+        }
+    }
+
+    private void DrawResultsTab()
+    {
+        if (solverState == SolverService.State.Idle)
+        {
+            ImGui.Text("No solution computed yet. Go to the Recipes tab and click 'Solve' to start.");
+            return;
+        }
+
+        // Display current state
+        ImGui.Text($"Status: {solverProgressMessage}");
+
+        if (solverState == SolverService.State.FindingInitialSolution)
+        {
+            ImGui.Text("Finding initial solution...");
+        }
+        else if (solverState == SolverService.State.Optimising)
+        {
+            ImGui.Text("Optimising...");
+            if (currentSolution != null)
+            {
+                ImGui.Text($"Current best value: {Math.Floor(currentSolution.OptimalValue)} gil");
+            }
+        }
+        else if (solverState == SolverService.State.Finished && currentSolution != null)
+        {
+            ImGuiHelpers.ScaledDummy(10.0f);
+            ImGui.Text("Finished");
+            ImGui.Separator();
+            ImGuiHelpers.ScaledDummy(5.0f);
+
+            // Reserve the remaining content height so the table can scroll independently and freeze the header
+            var avail = ImGui.GetContentRegionAvail();
+            using (var innerChild = ImRaii.Child("ResultsSolutionChild", new Vector2(-1.0f, avail.Y), true))
+            {
+                if (!innerChild.Success) return;
+                var tableFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.ScrollY;
+                // Display solution as a table with a single click handler for the whole cell
+                if (ImGui.BeginTable("SolutionTable", 4, tableFlags))
+                {
+                    ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableSetupColumn("Quantity", ImGuiTableColumnFlags.WidthFixed, 100.0f);
+                    ImGui.TableSetupColumn("Per Unit", ImGuiTableColumnFlags.WidthFixed, 100.0f);
+                    ImGui.TableSetupColumn("Contribution", ImGuiTableColumnFlags.WidthFixed, 100.0f);
+                    ImGui.TableHeadersRow();
+
+                    // Undo the wiggling applied before solving to get original values
+                    for (int i = 0; i < solverRecipes.Count && i < currentSolution.Values.Count; i++)
+                    {
+                        var quantity = (int)Math.Round(currentSolution.Values[i]);
+                        if (quantity > 0)
                         {
-                            try
+                            ImGui.TableNextRow();
+                            ImGui.TableSetColumnIndex(0);
+
+                            // Reserve full available width for the column before drawing
+                            var fullWidth = ImGui.GetContentRegionAvail().X;
+                            var iconHeight = 20.0f * ImGui.GetIO().FontGlobalScale;
+                            var rowHeight = Math.Max(ImGui.GetFrameHeightWithSpacing(), iconHeight);
+
+                            ImGui.InvisibleButton($"cell_btn_result_{solverRecipes[i].RowId}", new Vector2(fullWidth, rowHeight));
+                            if (ImGui.IsItemClicked())
                             {
-                                OpenRecipeInCraftingLog(recipe.RowId);
+                                try
+                                {
+                                    OpenRecipeInCraftingLog(solverRecipes[i].RowId);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Plugin.Log.Error($"Failed to open crafting log for recipe {solverRecipes[i].RowId}: {ex.Message}");
+                                }
                             }
-                            catch (Exception ex)
-                            {
-                                Plugin.Log.Error($"Failed to open crafting log for recipe {recipe.RowId}: {ex.Message}");
-                            }
+
+                            var btnMin = ImGui.GetItemRectMin();
+                            var padX = 4.0f;
+                            var iconY = btnMin.Y + (rowHeight - iconHeight) * 0.5f;
+
+                            ImGui.SetCursorScreenPos(new Vector2(btnMin.X + padX, iconY));
+                            DrawIcon(solverRecipes[i].Item.RowId, solverRecipes[i].Value);
+                            ImGui.Text(solverRecipes[i].Item.Name);
+
+                            ImGui.SetCursorScreenPos(new Vector2(btnMin.X + fullWidth, btnMin.Y));
+
+                            ImGui.TableSetColumnIndex(1);
+                            ImGui.Text((solverRecipes[i].Number * quantity).ToString());
+                            ImGui.TableSetColumnIndex(2);
+                            ImGui.Text($"{(int)solverRecipes[i].Value}");
+                            ImGui.TableSetColumnIndex(3);
+                            ImGui.Text($"{(int)solverRecipes[i].Value * solverRecipes[i].Number * quantity}");
                         }
                     }
 
                     ImGui.EndTable();
                 }
             }
+        }
+        else if (solverState == SolverService.State.Error || solverState == SolverService.State.Unbounded)
+        {
+            ImGui.TextColored(new Vector4(1.0f, 0.0f, 0.0f, 1.0f), $"Error: {solverProgressMessage}");
         }
     }
 
@@ -631,98 +744,4 @@ public class MainWindow : Window, IDisposable
         this.solverProgressMessage = message;
         this.currentSolution = solution;
     }
-
-    private void DrawResultsTab()
-    {
-        if (solverState == SolverService.State.Idle)
-        {
-            ImGui.Text("No solution computed yet. Go to the Recipes tab and click 'Solve' to start.");
-            return;
-        }
-
-        // Display current state
-        ImGui.Text($"Status: {solverProgressMessage}");
-
-        if (solverState == SolverService.State.FindingInitialSolution)
-        {
-            ImGui.Text("Finding initial solution...");
-        }
-        else if (solverState == SolverService.State.Optimising)
-        {
-            ImGui.Text("Optimising...");
-            if (currentSolution != null)
-            {
-                ImGui.Text($"Current best value: {-Math.Floor(currentSolution.OptimalValue)} gil");
-            }
-        }
-        else if (solverState == SolverService.State.Finished && currentSolution != null)
-        {
-            ImGuiHelpers.ScaledDummy(10.0f);
-            ImGui.Text($"Total value: {-Math.Floor(currentSolution.OptimalValue)} gil");
-            ImGuiHelpers.ScaledDummy(5.0f);
-
-            // Reserve the remaining content height so the table can scroll independently and freeze the header
-            var avail = ImGui.GetContentRegionAvail();
-            using (var child = ImRaii.Child("RecipesTableChild", new Vector2(-1.0f, avail.Y), true))
-            {
-                if (!child.Success) return;
-                var tableFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.ScrollY;
-                // Display solution as a table with a single click handler for the whole cell
-                if (ImGui.BeginTable("SolutionTable", 4, tableFlags))
-                {
-                    ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
-                    ImGui.TableSetupColumn("Quantity", ImGuiTableColumnFlags.WidthFixed, 100.0f);
-                    ImGui.TableSetupColumn("Per Unit", ImGuiTableColumnFlags.WidthFixed, 100.0f);
-                    ImGui.TableSetupColumn("Contribution", ImGuiTableColumnFlags.WidthFixed, 100.0f);
-                    ImGui.TableHeadersRow();
-
-                    // Undo the wiggling applied before solving to get original values
-                    for (int i = 0; i < solverRecipes.Count && i < currentSolution.Values.Count; i++)
-                    {
-                        var quantity = (int)Math.Round(currentSolution.Values[i]);
-                        if (quantity > 0)
-                        {
-                            ImGui.TableNextRow();
-                            ImGui.TableSetColumnIndex(0);
-
-                            // clickable region start
-                            var cellStart = ImGui.GetCursorScreenPos();
-
-                            DrawIcon(solverRecipes[i].Item.RowId, solverRecipes[i].Value);
-                            ImGui.Text(solverRecipes[i].Item.Name);
-
-                            // clickable region end
-                            var cellEnd = ImGui.GetItemRectMax();
-
-                            if (solverRecipes[i].RowId > 0 && ImGui.IsMouseClicked(0) && ImGui.IsMouseHoveringRect(cellStart, cellEnd, true))
-                            {
-                                try
-                                {
-                                    OpenRecipeInCraftingLog(solverRecipes[i].RowId);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Plugin.Log.Error($"Failed to open crafting log for recipe {solverRecipes[i].RowId}: {ex.Message}");
-                                }
-                            }
-
-                            ImGui.TableSetColumnIndex(1);
-                            ImGui.Text((solverRecipes[i].Number * quantity).ToString());
-                            ImGui.TableSetColumnIndex(2);
-                            ImGui.Text($"{(int)solverRecipes[i].Value}");
-                            ImGui.TableSetColumnIndex(3);
-                            ImGui.Text($"{(int)solverRecipes[i].Value * solverRecipes[i].Number * quantity}");
-                        }
-                    }
-
-                    ImGui.EndTable();
-                }
-            }
-        }
-        else if (solverState == SolverService.State.Error || solverState == SolverService.State.Unbounded)
-        {
-            ImGui.TextColored(new Vector4(1.0f, 0.0f, 0.0f, 1.0f), $"Error: {solverProgressMessage}");
-        }
-    }
-
 }
