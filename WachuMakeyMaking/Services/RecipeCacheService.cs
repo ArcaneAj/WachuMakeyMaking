@@ -166,6 +166,8 @@ public class RecipeCacheService
                     Plugin.Log.Warning("Universalis API request timed out after 10 seconds");
                     itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList(); // All items failed due to timeout
                 }
+
+                return;
             }
             catch (Exception ex)
             {
