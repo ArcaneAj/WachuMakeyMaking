@@ -214,12 +214,11 @@ public class MainWindow : Window, IDisposable
             ImGui.SameLine();
             ImGui.SetNextItemWidth(250.0f);
 
-            // BeginCombo -> inside it create a fixed-height child so the popup is constrained (100 px)
+            // Constrain the combo popup to max height 100px and a reasonable width.
+            // Call before BeginCombo so it applies to the combo popup window.
+            ImGui.SetNextWindowSizeConstraints(new Vector2(0, 0), new Vector2(250.0f, 300.0f));
             if (ImGui.BeginCombo("##add_resource_combo", currentName, ImGuiComboFlags.None))
             {
-                // Child with fixed height provides scrollable area that starts under the combo
-                ImGui.BeginChild("##add_resource_list", new Vector2(0, 100), false, ImGuiWindowFlags.AlwaysUseWindowPadding);
-
                 for (int i = 0; i < candidates.Count; i++)
                 {
                     var name = candidates[i].Name;
@@ -229,12 +228,9 @@ public class MainWindow : Window, IDisposable
                         resourceAddSelectedIndex = i;
                     }
                     if (selected)
-                    {
                         ImGui.SetItemDefaultFocus();
-                    }
                 }
 
-                ImGui.EndChild();
                 ImGui.EndCombo();
             }
 
