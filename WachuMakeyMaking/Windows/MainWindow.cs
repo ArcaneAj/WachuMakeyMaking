@@ -52,8 +52,8 @@ public class MainWindow : Window, IDisposable
     private bool shouldSwitchToResultsTab = false;
     private bool shouldSwitchToRecipesTab = false;
 
-    // UI state for adding a resource
-    private int resourceAddSelectedIndex = 0;
+    // Filter text the user can type to narrow candidates
+    private string resourceAddFilter = string.Empty;
 
     public MainWindow(Plugin plugin, RecipeCacheService recipeCacheService, SolverService solverService)
         : base($"{Plugin.Name}?##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
@@ -203,61 +203,64 @@ public class MainWindow : Window, IDisposable
             .OrderBy(x => x.Name)
             .ToList();
 
-        if (candidates.Count > 0)
+        // Filter textbox for candidate list
+        ImGui.Text("Add resource:");
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(250.0f);
+        if (ImGui.InputText("##resource_filter", ref resourceAddFilter, 256))
         {
-            // Current display name for combo
-            var currentName = (resourceAddSelectedIndex >= 0 && resourceAddSelectedIndex < candidates.Count)
-                ? candidates[resourceAddSelectedIndex].Name
-                : "Select...";
-
-            ImGui.Text("Add resource:");
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(250.0f);
-
-            // Constrain the combo popup to max height 100px and a reasonable width.
-            // Call before BeginCombo so it applies to the combo popup window.
-            ImGui.SetNextWindowSizeConstraints(new Vector2(0, 0), new Vector2(250.0f, 300.0f));
-            if (ImGui.BeginCombo("##add_resource_combo", currentName, ImGuiComboFlags.None))
-            {
-                for (int i = 0; i < candidates.Count; i++)
-                {
-                    var name = candidates[i].Name;
-                    var selected = (i == resourceAddSelectedIndex);
-                    if (ImGui.Selectable(name, selected))
-                    {
-                        resourceAddSelectedIndex = i;
-                    }
-                    if (selected)
-                        ImGui.SetItemDefaultFocus();
-                }
-
-                ImGui.EndCombo();
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("Add"))
-            {
-                var chosen = candidates[Math.Max(0, Math.Min(resourceAddSelectedIndex, candidates.Count - 1))];
-
-                // Default to quantity 0 (user can edit after adding)
-                var list = new List<ModItemStack>(allDisplayResources ?? Array.Empty<ModItemStack>())
-                {
-                    new ModItemStack(chosen, chosen.RowId, 0)
-                };
-                allDisplayResources = [.. list];
-
-                // Ensure selection and quantity state exists
-                resourceSelections[chosen.RowId] = true;
-                resourceQuantityOverrides[chosen.RowId] = 0;
-
-                // Update inventory lookup and refresh cache using existing override logic
-                inventoryDict = allDisplayResources.ToDictionary(x => x.Item, x => x);
-                recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
-            }
         }
-        else
+
+        // Apply the filter (case-insensitive) to the candidate list.
+        var filteredCandidates = string.IsNullOrWhiteSpace(resourceAddFilter)
+            ? candidates
+            : candidates.Where(x => x.Name.ToString().IndexOf(resourceAddFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+
+        // Current display name for combo (from filtered list)
+        var currentName = filteredCandidates.Count > 0 ? filteredCandidates[0].Name : "Select...";
+
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(250.0f);
+
+        // Constrain the combo popup to max height 100px and a reasonable width.
+        // Call before BeginCombo so it applies to the combo popup window.
+        ImGui.SetNextWindowSizeConstraints(new Vector2(0, 0), new Vector2(250.0f, 300.0f));
+        if (ImGui.BeginCombo("##add_resource_combo", currentName, ImGuiComboFlags.None))
         {
-            ImGui.TextDisabled("No additional candidate resources available to add");
+            for (int i = 0; i < filteredCandidates.Count; i++)
+            {
+                var name = filteredCandidates[i].Name;
+                if (ImGui.Selectable(name, i == 0))
+                {
+                    // Immediately add the clicked item
+                    var chosen = filteredCandidates[Math.Max(0, Math.Min(i, filteredCandidates.Count - 1))];
+
+                    // Default to quantity 0 (user can edit after adding)
+                    var list = new List<ModItemStack>(allDisplayResources ?? Array.Empty<ModItemStack>())
+                    {
+                        new ModItemStack(chosen, chosen.RowId, 0)
+                    };
+                    allDisplayResources = [.. list];
+
+                    // Ensure selection and quantity state exists
+                    resourceSelections[chosen.RowId] = true;
+                    resourceQuantityOverrides[chosen.RowId] = 0;
+
+                    // Update inventory lookup and refresh cache using existing override logic
+                    inventoryDict = allDisplayResources.ToDictionary(x => x.Item, x => x);
+                    recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
+
+                    // Reset filter and selected index so the combo shows the full list next time
+                    resourceAddFilter = string.Empty;
+
+                    // Close the combo popup after selection
+                    ImGui.CloseCurrentPopup();
+                }
+                if (i == 0)
+                    ImGui.SetItemDefaultFocus();
+            }
+
+            ImGui.EndCombo();
         }
 
         ImGuiHelpers.ScaledDummy(10.0f);

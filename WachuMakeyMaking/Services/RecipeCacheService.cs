@@ -48,12 +48,12 @@ public class RecipeCacheService
         var crystalIds = GetCrystals().Select(x => x.Id).ToArray();
         items = [..modItemStacks.Where(x => !crystalIds.Contains(x.Id))];
         crystals = [.. modItemStacks.Where(x => crystalIds.Contains(x.Id))];
-        cancellationTokenSource.Cancel();
         cachedRecipes.Clear();
         isCacheInitializing = false;
         CurrentProcessingStep = string.Empty;
         CurrentProgress = 0;
         TotalProgress = 0;
+        cancellationTokenSource.Cancel();
     }
 
     public async Task EnsureCacheInitializedAsync()
