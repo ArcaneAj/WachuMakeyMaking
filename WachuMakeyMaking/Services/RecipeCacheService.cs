@@ -177,11 +177,19 @@ public class RecipeCacheService
 
             foreach (var itemId in itemsWithoutValue)
             {
-                if (recipeLookup.TryGetValue(itemId, out var item))
+                if (recipeLookup.TryGetValue(itemId, out var recipe))
                 {
                     // Check if this item is collectable
-                    var (isCollectable, scripType, scripValue) = collectableService.GetCollectableInfo(item.Item);
-                    recipesWithValues.Add(new ModRecipeWithValue(item, scripValue, scripType));
+                    var (isCollectable, scripType, scripValue) = collectableService.GetCollectableInfo(recipe.Item);
+                    if (isCollectable)
+                    {
+                        recipesWithValues.Add(new ModRecipeWithValue(recipe, scripValue, scripType));
+                    }
+                    else
+                    {
+                        // Get the item's store price as a fallback, assuming we make it HQ for a 10% bonus
+                        recipesWithValues.Add(new ModRecipeWithValue(recipe, itemSheet.GetRow(itemId).PriceLow * 1.1, gil));
+                    }
                 }
             }
 
