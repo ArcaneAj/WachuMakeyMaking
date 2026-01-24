@@ -67,7 +67,7 @@ public sealed class UniversalisService : IDisposable
 
 
 
-        if (results.Count != 0)
+        if (idsArray.Count != 0)
         {
             this.errorMessage = "Error fetching market data from Universalis, falling back to store prices for missing items.";
             Plugin.ChatGui.PrintError(this.errorMessage);
