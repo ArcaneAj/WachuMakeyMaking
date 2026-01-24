@@ -1,6 +1,5 @@
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
-using System;
 using System.Collections.Generic;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Utils;
@@ -9,17 +8,11 @@ namespace WachuMakeyMaking.Services;
 
 public class CollectableService
 {
-    private readonly Plugin plugin;
-    private readonly Dictionary<ModItem, ModItemStack> collectablesCache;
-    private readonly Dictionary<ModItem, ModItemStack> restorationCache;
+    private readonly Dictionary<ModItem, ModItemStack> collectablesCache = [];
+    private readonly Dictionary<ModItem, ModItemStack> restorationCache = [];
 
-    public CollectableService(Plugin plugin)
+    public CollectableService()
     {
-        this.plugin = plugin;
-
-        this.collectablesCache = new Dictionary<ModItem, ModItemStack>();
-        this.restorationCache = new Dictionary<ModItem, ModItemStack>();
-
         this.Init();
     }
 
@@ -50,7 +43,7 @@ public class CollectableService
                     var currencyItem = itemSheet.GetRow(currency).ToMod();
                     var shopItemMod = itemSheet.GetRow(shopItem.Item.RowId).ToMod();
 
-                    collectablesCache[shopItemMod] = new ModItemStack(currencyItem, currency, shopRewardScrip.HighReward);
+                    this.collectablesCache[shopItemMod] = new ModItemStack(currencyItem, currency, shopRewardScrip.HighReward);
                 }
             }
         }
@@ -68,7 +61,7 @@ public class CollectableService
                 var scripId = itemHandIn.HighCollectableRewardPostPhase.RowId;
                 var scrip = hWDCrafterSupplyReward.GetRow(scripId).ScriptRewardAmount;
                 var item = itemSheet.GetRow(itemHandIn.ItemTradeIn.RowId).ToMod();
-                restorationCache[item] = new ModItemStack(skybuildersScrip, scripId, scrip);
+                this.restorationCache[item] = new ModItemStack(skybuildersScrip, scripId, scrip);
             }
         }
     }

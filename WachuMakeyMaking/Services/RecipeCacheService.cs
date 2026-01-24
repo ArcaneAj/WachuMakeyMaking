@@ -1,3 +1,4 @@
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Inventory;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using Lumina.Excel.Sheets;
@@ -11,23 +12,14 @@ using WachuMakeyMaking.Utils;
 
 namespace WachuMakeyMaking.Services;
 
-public class RecipeCacheService
+public class RecipeCacheService(UniversalisService universalisService, CollectableService collectableService)
 {
-    private readonly Plugin plugin;
-    private readonly UniversalisService universalisService;
-    private readonly CollectableService collectableService;
+    private readonly UniversalisService universalisService = universalisService;
+    private readonly CollectableService collectableService = collectableService;
 
     // Cache for recipes to avoid recalculating every frame
-    private List<ModRecipeWithValue> cachedRecipes = new();
+    private List<ModRecipeWithValue> cachedRecipes = [];
     private bool isCacheInitializing = false;
-
-    public RecipeCacheService(Plugin plugin, UniversalisService universalisService, CollectableService collectableService)
-    {
-        this.plugin = plugin;
-        this.universalisService = universalisService;
-        this.collectableService = collectableService;
-
-    }
 
     public bool IsCacheInitializing => isCacheInitializing;
 
@@ -38,6 +30,7 @@ public class RecipeCacheService
     public int TotalProgress { get; private set; }
 
     public List<ModRecipeWithValue> CachedRecipes => cachedRecipes;
+    public string UniversalisMessage => this.universalisService.ErrorMessage;
 
     private CancellationTokenSource cancellationTokenSource = new();
     private ModItemStack[] items = [];
@@ -97,7 +90,7 @@ public class RecipeCacheService
             // Find all recipes that use at least one ingredient from inventory
             var allRecipesWithInventoryIngredients = new List<ModRecipe>();
 
-            for (int i = 0; i < items.Length; i++)
+            for (var i = 0; i < items.Length; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var item = items[i];
@@ -131,9 +124,28 @@ public class RecipeCacheService
             // Create a lookup dictionary for quick access to recipes by item ID
             var recipeLookup = craftableRecipes.ToDictionary(r => r.Item.RowId, r => r);
 
+            foreach (var itemId in itemsWithoutValue)
+            {
+                if (recipeLookup.TryGetValue(itemId, out var recipe))
+                {
+                    // Check if this item is collectable
+                    var (isCollectable, scripType, scripValue) = this.collectableService.GetCollectableInfo(recipe.Item);
+                    if (isCollectable)
+                    {
+                        recipesWithValues.Add(new ModRecipeWithValue(recipe, scripValue, scripType));
+                    }
+                }
+            }
+
+            // Take out the ones we found now that we're outside the loop
+            foreach (var collectableRecipe in recipesWithValues)
+            {
+                itemsWithoutValue.Remove(collectableRecipe.Item.RowId);
+            }
+
             try
             {
-                var marketData = await universalisService.GetMarketDataAsync(itemsWithoutValue, apiCancellationToken);
+                var marketData = await this.universalisService.GetMarketDataAsync(itemsWithoutValue, apiCancellationToken);
 
                 foreach (var marketItem in marketData.results ?? [])
                 {
@@ -156,15 +168,14 @@ public class RecipeCacheService
                     }
                 }
 
-                // For now, assume all items were found (simplified - could be enhanced to handle failed items)
-                itemsWithoutValue = marketData.failedItems ?? [];
+                // All the items that weren't collectable and failed to be found via universalis
+                itemsWithoutValue = marketData.failedItems ?? itemsWithoutValue;
             }
             catch (OperationCanceledException)
             {
                 if (timedCancellationToken.IsCancellationRequested)
                 {
                     Plugin.Log.Warning("Universalis API request timed out after 10 seconds");
-                    itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList(); // All items failed due to timeout
                 }
 
                 return;
@@ -172,24 +183,14 @@ public class RecipeCacheService
             catch (Exception ex)
             {
                 Plugin.Log.Error($"Error calling Universalis API: {ex.Message}");
-                itemsWithoutValue = craftableRecipes.Select(x => x.Item.RowId).ToList(); // All items failed due to error
             }
 
             foreach (var itemId in itemsWithoutValue)
             {
                 if (recipeLookup.TryGetValue(itemId, out var recipe))
                 {
-                    // Check if this item is collectable
-                    var (isCollectable, scripType, scripValue) = collectableService.GetCollectableInfo(recipe.Item);
-                    if (isCollectable)
-                    {
-                        recipesWithValues.Add(new ModRecipeWithValue(recipe, scripValue, scripType));
-                    }
-                    else
-                    {
-                        // Get the item's store price as a fallback, assuming we make it HQ for a 10% bonus
-                        recipesWithValues.Add(new ModRecipeWithValue(recipe, itemSheet.GetRow(itemId).PriceLow * 1.1, gil));
-                    }
+                    // Get the item's store price as a fallback, assuming we make it HQ for a 10% bonus
+                    recipesWithValues.Add(new ModRecipeWithValue(recipe, itemSheet.GetRow(itemId).PriceLow * 1.1, gil));
                 }
             }
 
@@ -202,7 +203,7 @@ public class RecipeCacheService
         }
     }
 
-    private string GetItemName(uint itemId)
+    private static string GetItemName(uint itemId)
     {
         var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
         if (itemSheet.TryGetRow(itemId, out var itemRow))
@@ -212,12 +213,12 @@ public class RecipeCacheService
         return $"Unknown Item ({itemId})";
     }
 
-    public List<ModItemStack> GetCrystals()
+    public static List<ModItemStack> GetCrystals()
     {
-        return GetItemsFromInventory(GameInventoryType.Crystals).ToList();
+        return [.. GetItemsFromInventory(GameInventoryType.Crystals)];
     }
 
-    public List<ModItemStack> GetConsolidatedItems()
+    public static List<ModItemStack> GetConsolidatedItems()
     {
         var allItems = new List<ModItemStack>();
 
@@ -243,7 +244,7 @@ public class RecipeCacheService
         return consolidatedItems;
     }
 
-    private IEnumerable<ModItemStack> GetItemsFromInventory(GameInventoryType inventory)
+    private static List<ModItemStack> GetItemsFromInventory(GameInventoryType inventory)
     {
         var items = new List<ModItemStack>();
         var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
@@ -271,7 +272,7 @@ public class RecipeCacheService
             var ingredients = recipe.Ingredient;
             var amounts = recipe.AmountIngredient;
 
-            for (int i = 0; i < Math.Min(ingredients.Count, amounts.Count); i++)
+            for (var i = 0; i < Math.Min(ingredients.Count, amounts.Count); i++)
             {
                 var ingredientRef = ingredients[i];
                 var amount = amounts[i];
@@ -358,12 +359,9 @@ public class RecipeCacheService
     private Dictionary<uint, ModRecipe>? recipeCache;
     public Dictionary<uint, ModRecipe> FindRecipes()
     {
-        if (recipeCache == null)
-        {
-            recipeCache = Plugin.DataManager.GetExcelSheet<Recipe>()
+        recipeCache ??= Plugin.DataManager.GetExcelSheet<Recipe>()
                 .Where(x => x.ItemResult.Value.Name != string.Empty)
                 .Select(GetRecipeIngredients).ToDictionary(x => x.RowId, x => x);
-        }
 
         return recipeCache;
 

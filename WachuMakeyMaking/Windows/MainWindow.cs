@@ -1,5 +1,6 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Inventory.InventoryEventArgTypes;
+using Dalamud.Interface;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
@@ -8,6 +9,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -15,25 +17,24 @@ using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
 namespace WachuMakeyMaking.Windows;
 
-public class MainWindow : Window, IDisposable
+public sealed class MainWindow : Window, IDisposable
 {
-    private readonly Plugin plugin;
     private readonly RecipeCacheService recipeCacheService;
     private readonly SolverService solverService;
 
     private static readonly bool CheckedDefault = false;
 
     // Track which recipes are selected (checked)
-    private Dictionary<string, bool> recipeSelections = [];
+    private readonly Dictionary<string, bool> recipeSelections = [];
 
     // Track currency values (keyed by currency RowId)
-    private Dictionary<uint, float> currencyValues = [];
+    private readonly Dictionary<uint, float> currencyValues = [];
 
     // Track manual recipe value overrides (keyed by recipe key)
     // null means use calculated value, non-null means use this override
-    private Dictionary<string, int> recipeValueOverrides = [];
+    private readonly Dictionary<string, int> recipeValueOverrides = [];
 
-    private Dictionary<uint, int> resourceQuantityOverrides = [];
+    private readonly Dictionary<uint, int> resourceQuantityOverrides = [];
 
     private Dictionary<uint, bool> resourceSelections = [];
 
@@ -55,16 +56,15 @@ public class MainWindow : Window, IDisposable
     // Filter text the user can type to narrow candidates
     private string resourceAddFilter = string.Empty;
 
-    public MainWindow(Plugin plugin, RecipeCacheService recipeCacheService, SolverService solverService)
+    public MainWindow(RecipeCacheService recipeCacheService, SolverService solverService)
         : base($"{Plugin.Name}?##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
-        SizeConstraints = new WindowSizeConstraints
+        this.SizeConstraints = new WindowSizeConstraints
         {
             MinimumSize = new Vector2(375, 330),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue)
         };
 
-        this.plugin = plugin;
         this.recipeCacheService = recipeCacheService;
         this.solverService = solverService;
 
@@ -74,7 +74,7 @@ public class MainWindow : Window, IDisposable
         // Subscribe to inventory changes
         Plugin.GameInventory.InventoryChanged += OnInventoryChanged;
 
-        allIngredients = [.. recipeCacheService.FindRecipes().Values.SelectMany(x => x.Ingredients.Keys)];
+        this.allIngredients = [.. recipeCacheService.FindRecipes().Values.SelectMany(x => x.Ingredients.Keys)];
     }
 
     public void Dispose()
@@ -90,44 +90,44 @@ public class MainWindow : Window, IDisposable
 
     private void ResetSolver()
     {
-        solverService.Reset();
-        solverState = SolverService.State.Idle;
-        solverProgressMessage = string.Empty;
-        currentSolution = null;
-        currentRecipes.Clear();
+        this.solverService.Reset();
+        this.solverState = SolverService.State.Idle;
+        this.solverProgressMessage = string.Empty;
+        this.currentSolution = null;
+        this.currentRecipes.Clear();
     }
 
     private void ResetRecipeOverrides()
     {
-        recipeValueOverrides.Clear();
-        recipeSelections.Clear();
+        this.recipeValueOverrides.Clear();
+        this.recipeSelections.Clear();
         ResetSolver();
     }
 
     private void ResetResourceOverrides()
     {
-        var actualCrystals = recipeCacheService.GetCrystals();
-        var actualItems = recipeCacheService.GetConsolidatedItems();
-        allDisplayResources = [.. actualItems.Concat(actualCrystals).Where(x => allIngredients.Contains(x.Item))];
-        inventoryDict = allDisplayResources.ToDictionary(x => x.Item, x => x);
-        resourceQuantityOverrides.Clear();
-        resourceSelections = allDisplayResources.ToDictionary(x => x.Id, x => true);
+        var actualCrystals = RecipeCacheService.GetCrystals();
+        var actualItems = RecipeCacheService.GetConsolidatedItems();
+        this.allDisplayResources = [.. actualItems.Concat(actualCrystals).Where(x => this.allIngredients.Contains(x.Item))];
+        this.inventoryDict = this.allDisplayResources.ToDictionary(x => x.Item, x => x);
+        this.resourceQuantityOverrides.Clear();
+        this.resourceSelections = this.allDisplayResources.ToDictionary(x => x.Id, x => true);
         ResetSolver();
-        recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
+        this.recipeCacheService.ForceRefresh(ApplyOverrides(this.allDisplayResources));
         ResetRecipeOverrides();
     }
 
     public override void Draw()
     {
-        if (allDisplayResources == null || inventoryDict == null)
+        if (this.allDisplayResources == null || this.inventoryDict == null)
         {
-            allDisplayResources = [];
-            inventoryDict = [];
+            this.allDisplayResources = [];
+            this.inventoryDict = [];
             OnInventoryChanged([]);
         }
 
         // Initialize cache if needed
-        _ = recipeCacheService.EnsureCacheInitializedAsync();
+        _ = this.recipeCacheService.EnsureCacheInitializedAsync();
 
         // Create tabs
         using (var tabBar = ImRaii.TabBar("MainTabs"))
@@ -144,10 +144,10 @@ public class MainWindow : Window, IDisposable
                 }
 
                 // Tab 2: Recipes (current content)
-                var recipesTabFlags = shouldSwitchToRecipesTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
-                if (shouldSwitchToRecipesTab)
+                var recipesTabFlags = this.shouldSwitchToRecipesTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
+                if (this.shouldSwitchToRecipesTab)
                 {
-                    shouldSwitchToRecipesTab = false;
+                    this.shouldSwitchToRecipesTab = false;
                 }
                 using (var tab = ImRaii.TabItem("Recipes", recipesTabFlags))
                 {
@@ -158,10 +158,10 @@ public class MainWindow : Window, IDisposable
                 }
 
                 // Tab 3: Results
-                var resultsTabFlags = shouldSwitchToResultsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
-                if (shouldSwitchToResultsTab)
+                var resultsTabFlags = this.shouldSwitchToResultsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
+                if (this.shouldSwitchToResultsTab)
                 {
-                    shouldSwitchToResultsTab = false;
+                    this.shouldSwitchToResultsTab = false;
                 }
                 using (var tab = ImRaii.TabItem("Results", resultsTabFlags))
                 {
@@ -176,6 +176,8 @@ public class MainWindow : Window, IDisposable
 
     private void DrawResourcesTab()
     {
+        if (allDisplayResources == null) return;
+
         if (ImGui.Button("Reset"))
         {
             ResetResourceOverrides();
@@ -185,20 +187,20 @@ public class MainWindow : Window, IDisposable
 
         if (ImGui.Button("Submit"))
         {
-            recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
+            this.recipeCacheService.ForceRefresh(ApplyOverrides(this.allDisplayResources));
             ResetRecipeOverrides();
-            shouldSwitchToRecipesTab = true;
+            this.shouldSwitchToRecipesTab = true;
         }
 
         ImGui.SameLine();
 
-        var selectedItems = allDisplayResources.Count(r => resourceSelections.GetValueOrDefault(r.Id, false));
-        ImGui.Text($"{allDisplayResources.Length} resources found with recipes ({selectedItems} selected)");
+        var selectedItems = this.allDisplayResources.Count(r => this.resourceSelections.GetValueOrDefault(r.Id, false));
+        ImGui.Text($"{this.allDisplayResources.Length} resources found with recipes ({selectedItems} selected)");
 
         ImGuiHelpers.ScaledDummy(10.0f);
 
-        var presentItems = new HashSet<uint>(allDisplayResources?.Select(x => x.Id) ?? Enumerable.Empty<uint>());
-        var candidates = allIngredients
+        var presentItems = new HashSet<uint>(this.allDisplayResources?.Select(x => x.Id) ?? []);
+        var candidates = this.allIngredients
             .Where(x => !presentItems.Contains(x.RowId))
             .OrderBy(x => x.Name)
             .ToList();
@@ -207,14 +209,14 @@ public class MainWindow : Window, IDisposable
         ImGui.Text("Add resource:");
         ImGui.SameLine();
         ImGui.SetNextItemWidth(250.0f);
-        if (ImGui.InputText("##resource_filter", ref resourceAddFilter, 256))
+        if (ImGui.InputText("##resource_filter", ref this.resourceAddFilter, 256))
         {
         }
 
         // Apply the filter (case-insensitive) to the candidate list.
-        var filteredCandidates = string.IsNullOrWhiteSpace(resourceAddFilter)
+        var filteredCandidates = string.IsNullOrWhiteSpace(this.resourceAddFilter)
             ? candidates
-            : candidates.Where(x => x.Name.ToString().IndexOf(resourceAddFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            : [.. candidates.Where(x => x.Name.ToString().Contains(this.resourceAddFilter, StringComparison.OrdinalIgnoreCase))];
 
         // Current display name for combo (from filtered list)
         var currentName = filteredCandidates.Count > 0 ? filteredCandidates[0].Name : "Select...";
@@ -227,7 +229,7 @@ public class MainWindow : Window, IDisposable
         ImGui.SetNextWindowSizeConstraints(new Vector2(0, 0), new Vector2(250.0f, 300.0f));
         if (ImGui.BeginCombo("##add_resource_combo", currentName, ImGuiComboFlags.None))
         {
-            for (int i = 0; i < filteredCandidates.Count; i++)
+            for (var i = 0; i < filteredCandidates.Count; i++)
             {
                 var name = filteredCandidates[i].Name;
                 if (ImGui.Selectable(name, i == 0))
@@ -236,22 +238,22 @@ public class MainWindow : Window, IDisposable
                     var chosen = filteredCandidates[Math.Max(0, Math.Min(i, filteredCandidates.Count - 1))];
 
                     // Default to quantity 0 (user can edit after adding)
-                    var list = new List<ModItemStack>(allDisplayResources ?? Array.Empty<ModItemStack>())
+                    var list = new List<ModItemStack>(this.allDisplayResources ?? [])
                     {
-                        new ModItemStack(chosen, chosen.RowId, 0)
+                        new(chosen, chosen.RowId, 0)
                     };
-                    allDisplayResources = [.. list];
+                    this.allDisplayResources = [.. list];
 
                     // Ensure selection and quantity state exists
-                    resourceSelections[chosen.RowId] = true;
-                    resourceQuantityOverrides[chosen.RowId] = 0;
+                    this.resourceSelections[chosen.RowId] = true;
+                    this.resourceQuantityOverrides[chosen.RowId] = 0;
 
                     // Update inventory lookup and refresh cache using existing override logic
-                    inventoryDict = allDisplayResources.ToDictionary(x => x.Item, x => x);
-                    recipeCacheService.ForceRefresh(ApplyOverrides(allDisplayResources));
+                    this.inventoryDict = this.allDisplayResources.ToDictionary(x => x.Item, x => x);
+                    this.recipeCacheService.ForceRefresh(ApplyOverrides(this.allDisplayResources));
 
                     // Reset filter and selected index so the combo shows the full list next time
-                    resourceAddFilter = string.Empty;
+                    this.resourceAddFilter = string.Empty;
 
                     // Close the combo popup after selection
                     ImGui.CloseCurrentPopup();
@@ -266,11 +268,11 @@ public class MainWindow : Window, IDisposable
         ImGuiHelpers.ScaledDummy(10.0f);
 
         // Prepare toggle state / counts used by header checkbox
-        var totalResources = allDisplayResources.Length;
-        var selectedCount = allDisplayResources.Count(r => resourceSelections.GetValueOrDefault(r.Id, false));
-        bool allSelected = selectedCount == totalResources && totalResources > 0;
-        bool someSelected = selectedCount > 0 && selectedCount < totalResources;
-        bool noneSelected = selectedCount == 0;
+        var totalResources = this.allDisplayResources!.Length;
+        var selectedCount = this.allDisplayResources.Count(r => this.resourceSelections.GetValueOrDefault(r.Id, false));
+        var allSelected = selectedCount == totalResources && totalResources > 0;
+        var someSelected = selectedCount > 0 && selectedCount < totalResources;
+        var noneSelected = selectedCount == 0;
 
         // Reserve the remaining content height for the child so the table can scroll independently.
         var avail = ImGui.GetContentRegionAvail();
@@ -301,12 +303,12 @@ public class MainWindow : Window, IDisposable
                     if (headerToggle)
                     {
                         foreach (var resource in allDisplayResources)
-                            resourceSelections[resource.Id] = true;
+                            this.resourceSelections[resource.Id] = true;
                     }
                     else
                     {
                         foreach (var resource in allDisplayResources)
-                            resourceSelections[resource.Id] = false;
+                            this.resourceSelections[resource.Id] = false;
                     }
                 }
 
@@ -316,7 +318,7 @@ public class MainWindow : Window, IDisposable
                     var checkboxPos = ImGui.GetItemRectMin();
                     var checkboxSize = ImGui.GetItemRectSize();
                     var drawList = ImGui.GetWindowDrawList();
-                    var center = new Vector2(checkboxPos.X + checkboxSize.X * 0.5f, checkboxPos.Y + checkboxSize.Y * 0.5f);
+                    var center = new Vector2(checkboxPos.X + (checkboxSize.X * 0.5f), checkboxPos.Y + (checkboxSize.Y * 0.5f));
                     var lineLength = checkboxSize.X * 0.3f;
                     drawList.AddLine(
                         new Vector2(center.X - lineLength, center.Y),
@@ -330,10 +332,10 @@ public class MainWindow : Window, IDisposable
                 ImGui.Text("Resource");
 
                 // Rows (table body will scroll; header row is frozen)
-                foreach (var resourceItem in allDisplayResources.OrderBy(r => r.Item.Name.ToString()))
+                foreach (var resourceItem in this.allDisplayResources.OrderBy(r => r.Item.Name.ToString()))
                 {
                     var resourceId = resourceItem.Id;
-                    var isSelected = resourceSelections.GetValueOrDefault(resourceId, true);
+                    var isSelected = this.resourceSelections.GetValueOrDefault(resourceId, true);
                     var quantity = GetResourceQuantity(resourceItem);
 
                     ImGui.TableNextRow();
@@ -343,21 +345,21 @@ public class MainWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(80.0f);
                     if (ImGui.InputInt($"##quantity_{resourceId}", ref quantity))
                     {
-                        resourceQuantityOverrides[resourceId] = Math.Min(Math.Max(quantity, 0), 999999);
+                        this.resourceQuantityOverrides[resourceId] = Math.Min(Math.Max(quantity, 0), 999999);
                     }
 
                     // Checkbox column
                     ImGui.TableSetColumnIndex(1);
                     if (ImGui.Checkbox($"##sel_{resourceId}", ref isSelected))
                     {
-                        resourceSelections[resourceId] = isSelected;
+                        this.resourceSelections[resourceId] = isSelected;
                     }
 
                     // Resource column (icon + name)
                     ImGui.TableSetColumnIndex(2);
                     DrawIcon(resourceItem.Id);
                     var displayName = resourceItem.Item.Name;
-                    if (inventoryDict.TryGetValue(resourceItem.Item, out var originalItemStack))
+                    if (this.inventoryDict.TryGetValue(resourceItem.Item, out var originalItemStack))
                     {
                         displayName += $" ({originalItemStack.Quantity} available)";
                     }
@@ -423,7 +425,7 @@ public class MainWindow : Window, IDisposable
         foreach (var resourceItem in allDisplayResources)
         {
             var quantity = GetResourceQuantity(resourceItem);
-            if (!resourceSelections.TryGetValue(resourceItem.Id, out var selected) || selected)
+            if (!this.resourceSelections.TryGetValue(resourceItem.Id, out var selected) || selected)
             {
                 updated.Add(new ModItemStack(resourceItem.Item, resourceItem.Id, quantity));
             }
@@ -434,18 +436,18 @@ public class MainWindow : Window, IDisposable
 
     private void DrawRecipesTab()
     {
-        if (recipeCacheService.IsCacheInitializing)
+        if (this.recipeCacheService.IsCacheInitializing)
         {
             ImGui.Text("Loading recipes...");
 
-            if (!string.IsNullOrEmpty(recipeCacheService.CurrentProcessingStep))
+            if (!string.IsNullOrEmpty(this.recipeCacheService.CurrentProcessingStep))
             {
-                ImGui.Text(recipeCacheService.CurrentProcessingStep);
+                ImGui.Text(this.recipeCacheService.CurrentProcessingStep);
             }
 
-            if (recipeCacheService.TotalProgress > 0)
+            if (this.recipeCacheService.TotalProgress > 0)
             {
-                var progress = (float)recipeCacheService.CurrentProgress / recipeCacheService.TotalProgress;
+                var progress = (float)this.recipeCacheService.CurrentProgress / this.recipeCacheService.TotalProgress;
                 ImGui.ProgressBar(progress, new Vector2(-1, 20));
             }
 
@@ -453,25 +455,25 @@ public class MainWindow : Window, IDisposable
         }
 
         // Create a local snapshot of the cache to avoid race conditions
-        var cachedRecipes = recipeCacheService.CachedRecipes?.ToList() ?? [];
+        var cachedRecipes = this.recipeCacheService.CachedRecipes?.ToList() ?? [];
 
         // Update recipe selections for any new recipes
         foreach (var recipe in cachedRecipes)
         {
             var recipeKey = recipe.Item.Name.ToString();
-            if (!recipeSelections.ContainsKey(recipeKey))
+            if (!this.recipeSelections.ContainsKey(recipeKey))
             {
-                recipeSelections[recipeKey] = CheckedDefault;
+                this.recipeSelections[recipeKey] = CheckedDefault;
             }
         }
 
         // Remove selections and overrides for recipes that are no longer in cache
         var currentRecipeKeys = new HashSet<string>(cachedRecipes.Select(r => r.Item.Name.ToString()));
-        var keysToRemove = recipeSelections.Keys.Where(key => !currentRecipeKeys.Contains(key)).ToList();
+        var keysToRemove = this.recipeSelections.Keys.Where(key => !currentRecipeKeys.Contains(key)).ToList();
         foreach (var key in keysToRemove)
         {
-            recipeSelections.Remove(key);
-            recipeValueOverrides.Remove(key);
+            this.recipeSelections.Remove(key);
+            this.recipeValueOverrides.Remove(key);
         }
 
         if (ImGui.Button("Reset"))
@@ -481,7 +483,7 @@ public class MainWindow : Window, IDisposable
 
         ImGui.SameLine();
 
-        var selectedRecipes = cachedRecipes.Where(r => recipeSelections.GetValueOrDefault(r.Item.Name.ToString(), false)).ToList();
+        var selectedRecipes = cachedRecipes.Where(r => this.recipeSelections.GetValueOrDefault(r.Item.Name.ToString(), false)).ToList();
 
         if (selectedRecipes.Count == 0)
         {
@@ -491,15 +493,15 @@ public class MainWindow : Window, IDisposable
         if (ImGui.Button("Solve"))
         {
             // We slight wiggle the costs in order to prefer one over the other to avoid degeneracy
-            var recipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) * 1.001 * (index + 1) }).ToList();
-            solverRecipes = selectedRecipes.Select((ModRecipeWithValue x, int index) => x with { Value = GetRecipeValue(x) }).ToList(); ;
-            currentRecipes = recipes;
+            var recipes = selectedRecipes.Select((x, index) => x with { Value = GetRecipeValue(x) * 1.001 * (index + 1) }).ToList();
+            this.solverRecipes = [.. selectedRecipes.Select((x, index) => x with { Value = GetRecipeValue(x) })]; ;
+            this.currentRecipes = recipes;
             // Switch to Results tab
-            shouldSwitchToResultsTab = true;
+            this.shouldSwitchToResultsTab = true;
             // Call the solver service
-            Task.Run(() => solverService.Solve(
+            Task.Run(() => this.solverService.Solve(
                 recipes,
-                ApplyOverrides(allDisplayResources)
+                ApplyOverrides(this.allDisplayResources)
             ));
         }
 
@@ -512,6 +514,11 @@ public class MainWindow : Window, IDisposable
 
         ImGui.Text($"{cachedRecipes.Count} craftable recipes found ({selectedRecipes.Count} selected)");
 
+        if (!string.IsNullOrEmpty(this.recipeCacheService.UniversalisMessage))
+        {
+            ImGui.TextColored(KnownColor.OrangeRed.Vector(), this.recipeCacheService.UniversalisMessage);
+        }
+
         ImGuiHelpers.ScaledDummy(10.0f);
         if (cachedRecipes.Count > 0)
         {
@@ -519,10 +526,10 @@ public class MainWindow : Window, IDisposable
 
             // Clean up currency values for currencies that are no longer in cache
             var currentCurrencyIds = new HashSet<uint>(currencyGrouping.Select(g => g.Key));
-            var currencyIdsToRemove = currencyValues.Keys.Where(id => !currentCurrencyIds.Contains(id)).ToList();
+            var currencyIdsToRemove = this.currencyValues.Keys.Where(id => !currentCurrencyIds.Contains(id)).ToList();
             foreach (var id in currencyIdsToRemove)
             {
-                currencyValues.Remove(id);
+                this.currencyValues.Remove(id);
             }
 
             // Editable scrip value controls
@@ -532,25 +539,25 @@ public class MainWindow : Window, IDisposable
                 var currency = currencyGroup.First().Currency;
 
                 // Initialize currency value if not present
-                if (!currencyValues.ContainsKey(currencyId))
+                if (!this.currencyValues.TryGetValue(currencyId, out var currencyValue))
                 {
-                    currencyValues[currencyId] = 1.0f;
+                    currencyValue = 1.0f;
+                    this.currencyValues[currencyId] = currencyValue;
                 }
 
-                var currencyValue = currencyValues[currencyId];
                 if (ImGui.InputFloat($"{currency.Name} gil value", ref currencyValue, 0, 0, "%.2f"))
                 {
                     // Cap at 1000 to avoid prices exceeding 999999
-                    currencyValues[currencyId] = Math.Min(currencyValue, 1000.0f);
+                    this.currencyValues[currencyId] = Math.Min(currencyValue, 1000.0f);
                 }
             }
 
             // Prepare toggle state / counts used by header checkbox
             var totalRecipes = cachedRecipes.Count;
-            var selectedCount = cachedRecipes.Count(r => recipeSelections.GetValueOrDefault(r.Item.Name.ToString(), false));
-            bool allSelected = selectedCount == totalRecipes && totalRecipes > 0;
-            bool someSelected = selectedCount > 0 && selectedCount < totalRecipes;
-            bool noneSelected = selectedCount == 0;
+            var selectedCount = cachedRecipes.Count(r => this.recipeSelections.GetValueOrDefault(r.Item.Name.ToString(), false));
+            var allSelected = selectedCount == totalRecipes && totalRecipes > 0;
+            var someSelected = selectedCount > 0 && selectedCount < totalRecipes;
+            var noneSelected = selectedCount == 0;
 
             // Reserve the remaining content height so the table can scroll independently and freeze the header
             var avail = ImGui.GetContentRegionAvail();
@@ -583,7 +590,7 @@ public class MainWindow : Window, IDisposable
                         {
                             foreach (var recipe in cachedRecipes)
                             {
-                                recipeSelections[recipe.Item.Name.ToString()] = true;
+                                this.recipeSelections[recipe.Item.Name.ToString()] = true;
                             }
                         }
                         // If clicking when all selected, deselect all
@@ -591,7 +598,7 @@ public class MainWindow : Window, IDisposable
                         {
                             foreach (var recipe in cachedRecipes)
                             {
-                                recipeSelections[recipe.Item.Name.ToString()] = false;
+                                this.recipeSelections[recipe.Item.Name.ToString()] = false;
                             }
                         }
                     }
@@ -602,7 +609,7 @@ public class MainWindow : Window, IDisposable
                         var checkboxPos = ImGui.GetItemRectMin();
                         var checkboxSize = ImGui.GetItemRectSize();
                         var drawList = ImGui.GetWindowDrawList();
-                        var center = new Vector2(checkboxPos.X + checkboxSize.X * 0.5f, checkboxPos.Y + checkboxSize.Y * 0.5f);
+                        var center = new Vector2(checkboxPos.X + (checkboxSize.X * 0.5f), checkboxPos.Y + (checkboxSize.Y * 0.5f));
                         var lineLength = checkboxSize.X * 0.3f;
                         drawList.AddLine(
                             new Vector2(center.X - lineLength, center.Y),
@@ -619,7 +626,7 @@ public class MainWindow : Window, IDisposable
                     foreach (var recipe in cachedRecipes.OrderBy(r => r.Item.Name.ToString()))
                     {
                         var recipeKey = recipe.Item.Name.ToString();
-                        var isSelected = recipeSelections.GetValueOrDefault(recipeKey, false);
+                        var isSelected = this.recipeSelections.GetValueOrDefault(recipeKey, false);
 
                         // Get the displayed value (use override if exists, otherwise calculated)
                         var value = GetRecipeValue(recipe);
@@ -632,14 +639,14 @@ public class MainWindow : Window, IDisposable
                         if (ImGui.InputInt($"##value_{recipeKey}", ref value))
                         {
                             // Clamp to valid range (0-999999)
-                            recipeValueOverrides[recipeKey] = Math.Min(Math.Max(value, 0), 999999);
+                            this.recipeValueOverrides[recipeKey] = Math.Min(Math.Max(value, 0), 999999);
                         }
 
                         // Checkbox column
                         ImGui.TableSetColumnIndex(1);
                         if (ImGui.Checkbox($"##{recipeKey}", ref isSelected))
                         {
-                            recipeSelections[recipeKey] = isSelected;
+                            this.recipeSelections[recipeKey] = isSelected;
                         }
 
                         // Recipe column (icon + name) — single click handler for entire cell using an InvisibleButton
@@ -669,7 +676,7 @@ public class MainWindow : Window, IDisposable
 
                         var btnMin = ImGui.GetItemRectMin();
                         var padX = 4.0f;
-                        var iconY = btnMin.Y + (rowHeight - iconHeight) * 0.5f;
+                        var iconY = btnMin.Y + ((rowHeight - iconHeight) * 0.5f);
 
                         ImGui.SetCursorScreenPos(new Vector2(btnMin.X + padX, iconY));
                         DrawIcon(recipe.Item.RowId);
@@ -688,28 +695,28 @@ public class MainWindow : Window, IDisposable
 
     private void DrawResultsTab()
     {
-        if (solverState == SolverService.State.Idle)
+        if (this.solverState == SolverService.State.Idle)
         {
             ImGui.Text("No solution computed yet. Go to the Recipes tab and click 'Solve' to start.");
             return;
         }
 
         // Display current state
-        ImGui.Text($"Status: {solverProgressMessage}");
+        ImGui.Text($"Status: {this.solverProgressMessage}");
 
-        if (solverState == SolverService.State.FindingInitialSolution)
+        if (this.solverState == SolverService.State.FindingInitialSolution)
         {
             ImGui.Text("Finding initial solution...");
         }
-        else if (solverState == SolverService.State.Optimising)
+        else if (this.solverState == SolverService.State.Optimising)
         {
             ImGui.Text("Optimising...");
             if (currentSolution != null)
             {
-                ImGui.Text($"Current best value: {Math.Floor(currentSolution.OptimalValue)} gil");
+                ImGui.Text($"Current best value: {Math.Floor(this.currentSolution.OptimalValue)} gil");
             }
         }
-        else if (solverState == SolverService.State.Finished && currentSolution != null)
+        else if (this.solverState == SolverService.State.Finished && this.currentSolution != null)
         {
             ImGuiHelpers.ScaledDummy(10.0f);
             ImGui.Text("Finished");
@@ -732,9 +739,9 @@ public class MainWindow : Window, IDisposable
                     ImGui.TableHeadersRow();
 
                     // Undo the wiggling applied before solving to get original values
-                    for (int i = 0; i < solverRecipes.Count && i < currentSolution.Values.Count; i++)
+                    for (var i = 0; i < this.solverRecipes.Count && i < this.currentSolution.Values.Count; i++)
                     {
-                        var quantity = (int)Math.Round(currentSolution.Values[i]);
+                        var quantity = (int)Math.Round(this.currentSolution.Values[i]);
                         if (quantity > 0)
                         {
                             ImGui.TableNextRow();
@@ -745,35 +752,35 @@ public class MainWindow : Window, IDisposable
                             var iconHeight = 20.0f * ImGui.GetIO().FontGlobalScale;
                             var rowHeight = Math.Max(ImGui.GetFrameHeightWithSpacing(), iconHeight);
 
-                            ImGui.InvisibleButton($"cell_btn_result_{solverRecipes[i].RowId}", new Vector2(fullWidth, rowHeight));
+                            ImGui.InvisibleButton($"cell_btn_result_{this.solverRecipes[i].RowId}", new Vector2(fullWidth, rowHeight));
                             if (ImGui.IsItemClicked())
                             {
                                 try
                                 {
-                                    OpenRecipeInCraftingLog(solverRecipes[i].RowId);
+                                    OpenRecipeInCraftingLog(this.solverRecipes[i].RowId);
                                 }
                                 catch (Exception ex)
                                 {
-                                    Plugin.Log.Error($"Failed to open crafting log for recipe {solverRecipes[i].RowId}: {ex.Message}");
+                                    Plugin.Log.Error($"Failed to open crafting log for recipe {this.solverRecipes[i].RowId}: {ex.Message}");
                                 }
                             }
 
                             var btnMin = ImGui.GetItemRectMin();
                             var padX = 4.0f;
-                            var iconY = btnMin.Y + (rowHeight - iconHeight) * 0.5f;
+                            var iconY = btnMin.Y + ((rowHeight - iconHeight) * 0.5f);
 
                             ImGui.SetCursorScreenPos(new Vector2(btnMin.X + padX, iconY));
-                            DrawIcon(solverRecipes[i].Item.RowId, solverRecipes[i].Value);
-                            ImGui.Text(solverRecipes[i].Item.Name);
+                            DrawIcon(this.solverRecipes[i].Item.RowId, this.solverRecipes[i].Value);
+                            ImGui.Text(this.solverRecipes[i].Item.Name);
 
                             ImGui.SetCursorScreenPos(new Vector2(btnMin.X + fullWidth, btnMin.Y));
 
                             ImGui.TableSetColumnIndex(1);
-                            ImGui.Text((solverRecipes[i].Number * quantity).ToString());
+                            ImGui.Text((this.solverRecipes[i].Number * quantity).ToString());
                             ImGui.TableSetColumnIndex(2);
-                            ImGui.Text($"{(int)solverRecipes[i].Value}");
+                            ImGui.Text($"{(int)this.solverRecipes[i].Value}");
                             ImGui.TableSetColumnIndex(3);
-                            ImGui.Text($"{(int)solverRecipes[i].Value * solverRecipes[i].Number * quantity}");
+                            ImGui.Text($"{(int)this.solverRecipes[i].Value * this.solverRecipes[i].Number * quantity}");
                         }
                     }
 
@@ -781,15 +788,15 @@ public class MainWindow : Window, IDisposable
                 }
             }
         }
-        else if (solverState == SolverService.State.Error || solverState == SolverService.State.Unbounded)
+        else if (this.solverState == SolverService.State.Error || this.solverState == SolverService.State.Unbounded)
         {
-            ImGui.TextColored(new Vector4(1.0f, 0.0f, 0.0f, 1.0f), $"Error: {solverProgressMessage}");
+            ImGui.TextColored(new Vector4(1.0f, 0.0f, 0.0f, 1.0f), $"Error: {this.solverProgressMessage}");
         }
     }
 
     private int GetResourceQuantity(ModItemStack resourceItem)
     {
-        if (resourceQuantityOverrides.TryGetValue(resourceItem.Id, out var quantity)) return quantity;
+        if (this.resourceQuantityOverrides.TryGetValue(resourceItem.Id, out var quantity)) return quantity;
         return resourceItem.Quantity;
     }
 

@@ -18,6 +18,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPlayerState PlayerState { get; private set; } = null!;
     [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
     [PluginService] internal static IGameInventory GameInventory { get; private set; } = null!;
+    [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
 
     private const string CommandName = "/wymm";
@@ -31,11 +32,11 @@ public sealed class Plugin : IDalamudPlugin
 
     public Plugin()
     {
-        UniversalisService = new UniversalisService(this);
-        CollectableService = new CollectableService(this);
-        RecipeCacheService = new RecipeCacheService(this, UniversalisService, CollectableService);
-        SolverService = new SolverService((string l) => Log.Info(l), (string l) => Log.Error(l));
-        MainWindow = new MainWindow(this, RecipeCacheService, SolverService);
+        UniversalisService = new UniversalisService();
+        CollectableService = new CollectableService();
+        RecipeCacheService = new RecipeCacheService(UniversalisService, CollectableService);
+        SolverService = new SolverService(l => Log.Info(l), l => Log.Error(l));
+        MainWindow = new MainWindow(RecipeCacheService, SolverService);
 
         WindowSystem.AddWindow(MainWindow);
 

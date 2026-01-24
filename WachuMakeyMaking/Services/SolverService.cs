@@ -2,17 +2,16 @@ using WachuMakeyMaking.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 
 namespace WachuMakeyMaking.Services
 {
-    public class SolverService
+    public class SolverService(Action<string> log, Action<string> logError)
     {
-        private readonly Action<string> log;
-        private readonly Action<string> logError;
+        private readonly Action<string> log = log;
+        private readonly Action<string> logError = logError;
         private readonly List<Action<State, string, Solution?>> progressListeners = [];
-        private State state;
+        private State state = State.Idle;
         private Solution currentBest = null!;
         private double lowerBound = 0.0;
         private string progressMessage = string.Empty;
@@ -29,13 +28,6 @@ namespace WachuMakeyMaking.Services
             Error
         }
 
-        public SolverService(Action<string> log, Action<string> logError)
-        {
-            this.log = log;
-            this.logError = logError;
-            this.state = State.Idle;
-        }
-
         public void RegisterProgressListener(Action<State, string, Solution?> listener)
         {
             this.progressListeners.Add(listener);
@@ -43,7 +35,7 @@ namespace WachuMakeyMaking.Services
 
         public void Reset()
         {
-            cancellationTokenSource.Cancel();
+            this.cancellationTokenSource.Cancel();
             this.state = State.Idle;
             this.currentBest = null!;
             this.lowerBound = 0.0;
@@ -71,8 +63,8 @@ namespace WachuMakeyMaking.Services
                     return new Solution([], 0, State.Error, []);
                 }
 
-                cancellationTokenSource = new();
-                var cancellationToken = cancellationTokenSource.Token;
+                this.cancellationTokenSource = new();
+                var cancellationToken = this.cancellationTokenSource.Token;
 
                 this.currentBest = null!;
                 UpdateProgress(State.FindingInitialSolution, "Finding initial solution...");
@@ -94,7 +86,7 @@ namespace WachuMakeyMaking.Services
                 }
 
                 var branches = new Stack<Branch>();
-                var problem = new Problem(assignmentsList.ToArray(), costs, constraintsList.ToArray());
+                var problem = new Problem([.. assignmentsList], costs, [.. constraintsList]);
                 var result = Solve(problem, branches, cancellationToken);
                 if (result.State == State.Unbounded)
                 {
@@ -139,7 +131,7 @@ namespace WachuMakeyMaking.Services
 
         private bool BranchAndBound(Problem problem, Solution previousResult, CancellationToken cancellationToken)
         {
-            var valuesToBranch = previousResult.Values.Select((double val, int index) => (val, index)).Where(x => x.val - Math.Floor(x.val) > 1e-10).ToList();
+            var valuesToBranch = previousResult.Values.Select((val, index) => (val, index)).Where(x => x.val - Math.Floor(x.val) > 1e-10).ToList();
 
             // If we're integral, check if this is the best solution so far
             if (valuesToBranch.Count == 0)
@@ -183,7 +175,7 @@ namespace WachuMakeyMaking.Services
             if (positiveResult.State == State.Optimal)
             {
                 // Verify the solution satisfies the branch constraint
-                bool feasible = positiveResult.Values[branchVar.index] <= floorVal + 1e-10;
+                var feasible = positiveResult.Values[branchVar.index] <= floorVal + 1e-10;
                 if (!feasible)
                 {
                     this.log($"Branch constraint violated: x[{branchVar.index}] = {positiveResult.Values[branchVar.index]} > {floorVal}, skipping");
@@ -213,7 +205,7 @@ namespace WachuMakeyMaking.Services
             if (negativeResult.State == State.Optimal)
             {
                 // Verify the solution satisfies the branch constraint
-                bool feasible = negativeResult.Values[branchVar.index] >= ceilVal - 1e-10;
+                var feasible = negativeResult.Values[branchVar.index] >= ceilVal - 1e-10;
                 if (!feasible)
                 {
                     this.log($"Branch constraint violated: x[{branchVar.index}] = {negativeResult.Values[branchVar.index]} < {ceilVal}, skipping");
@@ -237,22 +229,22 @@ namespace WachuMakeyMaking.Services
             return false;
         }
 
-        private Solution Solve(Problem problem, Stack<Branch> branches, CancellationToken cancellationToken)
+        private static Solution Solve(Problem problem, Stack<Branch> branches, CancellationToken cancellationToken)
         {
             try
             {
                 // Validate input dimensions
                 if (problem.Assignments.Length == 0 || problem.Assignments[0].Length == 0 || problem.Assignments.Any(x => x.Length != problem.Assignments[0].Length))
                 {
-                    return new Solution(new List<double>(), 0, State.Error, branches);
+                    return new Solution([], 0, State.Error, branches);
                 }
 
-                int m = problem.Assignments.Length; // number of constraints (resources)
-                int n = problem.Assignments[0].Length; // number of variables (recipes)
+                var m = problem.Assignments.Length; // number of constraints (resources)
+                var n = problem.Assignments[0].Length; // number of variables (recipes)
 
                 if (problem.Costs.Length != n || problem.Constraints.Length != m)
                 {
-                    return new Solution(new List<double>(), 0, State.Error, branches);
+                    return new Solution([], 0, State.Error, branches);
                 }
 
                 var branchConstraints = new List<int>();
@@ -278,39 +270,39 @@ namespace WachuMakeyMaking.Services
 
                 // Convert to standard form: Ax ≤ b becomes Ax + s = b
                 // Initial basis: slack variables (indices n to n+m-1)
-                int[] basis = new int[m];
-                for (int i = 0; i < m; i++)
+                var basis = new int[m];
+                for (var i = 0; i < m; i++)
                 {
                     basis[i] = n + i;
                 }
 
                 // Initial solution: x = 0, s = b
-                double[] x = new double[n + m];
-                for (int i = 0; i < m; i++)
+                var x = new double[n + m];
+                for (var i = 0; i < m; i++)
                 {
                     x[n + i] = fullConstraints[i];
                 }
 
                 // Create augmented coefficient matrix [A | I]
-                double[][] A_augmented = new double[m][];
-                for (int i = 0; i < m; i++)
+                var A_augmented = new double[m][];
+                for (var i = 0; i < m; i++)
                 {
                     A_augmented[i] = new double[n + m];
                     // Copy original coefficients (convert int to double)
-                    for (int j = 0; j < n; j++)
+                    for (var j = 0; j < n; j++)
                     {
                         A_augmented[i][j] = fullAssignments[i][j];
                     }
                     // Add identity matrix for slack variables
-                    for (int j = 0; j < m; j++)
+                    for (var j = 0; j < m; j++)
                     {
                         A_augmented[i][n + j] = (i == j) ? 1 : 0;
                     }
                 }
 
                 // Augmented costs: [c | 0] (zeros for slack variables)
-                double[] c_augmented = new double[n + m];
-                for (int j = 0; j < n; j++)
+                var c_augmented = new double[n + m];
+                for (var j = 0; j < n; j++)
                 {
                     c_augmented[j] = problem.Costs[j];
                 }
@@ -323,7 +315,7 @@ namespace WachuMakeyMaking.Services
                 {
                     // Extract solution (only original variables)
                     var solution = new List<double>();
-                    for (int i = 0; i < n; i++)
+                    for (var i = 0; i < n; i++)
                     {
                         solution.Add(result.x[i]);
                     }
@@ -331,35 +323,41 @@ namespace WachuMakeyMaking.Services
                 }
                 else if (result.status == "unbounded")
                 {
-                    return new Solution(new List<double>(), 0, State.Unbounded, branches);
+                    return new Solution([], 0, State.Unbounded, branches);
                 }
                 else
                 {
-                    return new Solution(new List<double>(), 0, State.Error, branches);
+                    return new Solution([], 0, State.Error, branches);
                 }
             }
             catch (Exception)
             {
-                return new Solution(new List<double>(), 0, State.Error, branches);
+                return new Solution([], 0, State.Error, branches);
             }
         }
 
-        private (string status, double[] x, double optimalValue, int[] basis) RevisedSimplex(
-            double[][] A, double[] c, int n, int m, int[] basis, double[] x, CancellationToken cancellationToken)
+        private static (string status, double[] x, double optimalValue, int[] basis) RevisedSimplex(
+            double[][] A,
+            double[] c,
+            int n,
+            int m,
+            int[] basis,
+            double[] x,
+            CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             // Initialize basis inverse (identity matrix)
-            double[][] B_inv = new double[m][];
-            for (int i = 0; i < m; i++)
+            var B_inv = new double[m][];
+            for (var i = 0; i < m; i++)
             {
                 B_inv[i] = new double[m];
-                for (int j = 0; j < m; j++)
+                for (var j = 0; j < m; j++)
                 {
                     B_inv[i][j] = (i == j) ? 1 : 0;
                 }
             }
 
-            int iteration = 0;
+            var iteration = 0;
             const int maxIterations = 1000;
 
             while (iteration < maxIterations)
@@ -368,16 +366,16 @@ namespace WachuMakeyMaking.Services
                 iteration++;
 
                 // Compute reduced costs: c_j - c_B * B_inv * A_j
-                double[] reducedCosts = new double[n + m];
+                var reducedCosts = new double[n + m];
 
-                for (int j = 0; j < n + m; j++)
+                for (var j = 0; j < n + m; j++)
                 {
                     // Get column A_j
-                    double[] A_j = new double[m];
+                    var A_j = new double[m];
                     if (j < n)
                     {
                         // Original variable - use column from A
-                        for (int i = 0; i < m; i++)
+                        for (var i = 0; i < m; i++)
                         {
                             A_j[i] = A[i][j];
                         }
@@ -385,16 +383,16 @@ namespace WachuMakeyMaking.Services
                     else
                     {
                         // Slack variable - identity matrix column
-                        int slackIndex = j - n;
+                        var slackIndex = j - n;
                         A_j[slackIndex] = 1;
                     }
 
                     // Compute y = B_inv * A_j
-                    double[] y = MatrixVectorMultiply(B_inv, A_j);
+                    var y = MatrixVectorMultiply(B_inv, A_j);
 
                     // Compute reduced cost c_j - c_B * y
-                    double reducedCost = c[j];
-                    for (int i = 0; i < m; i++)
+                    var reducedCost = c[j];
+                    for (var i = 0; i < m; i++)
                     {
                         reducedCost -= c[basis[i]] * y[i];
                     }
@@ -402,12 +400,12 @@ namespace WachuMakeyMaking.Services
                 }
 
                 // Check optimality (for minimization, all reduced costs >= 0)
-                double minReducedCost = reducedCosts.Min();
+                var minReducedCost = reducedCosts.Min();
                 if (minReducedCost >= -1e-10)
                 {
                     // Optimal solution found
                     double optimalValue = 0;
-                    for (int i = 0; i < m; i++)
+                    for (var i = 0; i < m; i++)
                     {
                         optimalValue += c[basis[i]] * x[basis[i]];
                     }
@@ -415,35 +413,35 @@ namespace WachuMakeyMaking.Services
                 }
 
                 // Choose entering variable (most negative reduced cost)
-                int enteringVar = Array.IndexOf(reducedCosts, minReducedCost);
+                var enteringVar = Array.IndexOf(reducedCosts, minReducedCost);
 
                 // Get entering column
-                double[] A_entering = new double[m];
+                var A_entering = new double[m];
                 if (enteringVar < n)
                 {
-                    for (int i = 0; i < m; i++)
+                    for (var i = 0; i < m; i++)
                     {
                         A_entering[i] = A[i][enteringVar];
                     }
                 }
                 else
                 {
-                    int slackIndex = enteringVar - n;
+                    var slackIndex = enteringVar - n;
                     A_entering[slackIndex] = 1;
                 }
 
                 // Compute direction: d = B_inv * A_entering
-                double[] d = MatrixVectorMultiply(B_inv, A_entering);
+                var d = MatrixVectorMultiply(B_inv, A_entering);
 
                 // Check if problem is unbounded
-                double minRatio = double.PositiveInfinity;
-                int leavingVar = -1;
+                var minRatio = double.PositiveInfinity;
+                var leavingVar = -1;
 
-                for (int i = 0; i < m; i++)
+                for (var i = 0; i < m; i++)
                 {
                     if (d[i] > 1e-10)
                     {
-                        double ratio = x[basis[i]] / d[i];
+                        var ratio = x[basis[i]] / d[i];
                         if (ratio < minRatio)
                         {
                             minRatio = ratio;
@@ -458,11 +456,11 @@ namespace WachuMakeyMaking.Services
                 }
 
                 // Update solution and basis
-                int leavingVarIndex = basis[leavingVar];
-                double theta = x[leavingVarIndex] / d[leavingVar];
+                var leavingVarIndex = basis[leavingVar];
+                var theta = x[leavingVarIndex] / d[leavingVar];
 
                 // Update all basic variables: x_B = x_B - theta * d
-                for (int i = 0; i < m; i++)
+                for (var i = 0; i < m; i++)
                 {
                     x[basis[i]] -= theta * d[i];
                 }
@@ -475,11 +473,11 @@ namespace WachuMakeyMaking.Services
                 basis[leavingVar] = enteringVar;
 
                 // Update basis inverse using eta matrix
-                double[][] E = new double[m][];
-                for (int i = 0; i < m; i++)
+                var E = new double[m][];
+                for (var i = 0; i < m; i++)
                 {
                     E[i] = new double[m];
-                    for (int j = 0; j < m; j++)
+                    for (var j = 0; j < m; j++)
                     {
                         if (j == leavingVar)
                         {
@@ -500,12 +498,12 @@ namespace WachuMakeyMaking.Services
 
         private static double[] MatrixVectorMultiply(double[][] matrix, double[] vector)
         {
-            int m = matrix.Length;
-            double[] result = new double[m];
+            var m = matrix.Length;
+            var result = new double[m];
 
-            for (int i = 0; i < m; i++)
+            for (var i = 0; i < m; i++)
             {
-                for (int j = 0; j < vector.Length; j++)
+                for (var j = 0; j < vector.Length; j++)
                 {
                     result[i] += matrix[i][j] * vector[j];
                 }
@@ -516,17 +514,17 @@ namespace WachuMakeyMaking.Services
 
         private static double[][] MatrixMultiply(double[][] A, double[][] B)
         {
-            int m = A.Length;
-            int n = B[0].Length;
-            int p = A[0].Length;
+            var m = A.Length;
+            var n = B[0].Length;
+            var p = A[0].Length;
 
-            double[][] result = new double[m][];
-            for (int i = 0; i < m; i++)
+            var result = new double[m][];
+            for (var i = 0; i < m; i++)
             {
                 result[i] = new double[n];
-                for (int j = 0; j < n; j++)
+                for (var j = 0; j < n; j++)
                 {
-                    for (int k = 0; k < p; k++)
+                    for (var k = 0; k < p; k++)
                     {
                         result[i][j] += A[i][k] * B[k][j];
                     }
@@ -558,15 +556,7 @@ namespace WachuMakeyMaking.Services
 
         public override int GetHashCode()
         {
-            unchecked
-            {
-                int hash = 17;
-                hash = hash * 23 + State.GetHashCode();
-                hash = hash * 23 + OptimalValue.GetHashCode();
-                hash = hash * 23 + Values.GetHashCode();
-                hash = hash * 23 + Branches.GetHashCode();
-                return hash;
-            }
+            return HashCode.Combine(State, OptimalValue, Values, Branches);
         }
 
         public void Print(List<ModRecipeWithValue> recipes, Action<string> log)
