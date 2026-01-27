@@ -19,10 +19,7 @@ public sealed class UniversalisService : IDisposable
 
     public UniversalisService()
     {
-        this.httpClient = new HttpClient(new SocketsHttpHandler
-        {
-            AutomaticDecompression = DecompressionMethods.All
-        });
+        this.httpClient = new HttpClient(new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All });
     }
 
     public void Dispose()
@@ -30,7 +27,10 @@ public sealed class UniversalisService : IDisposable
         this.httpClient?.Dispose();
     }
 
-    public async Task<AggregatedMarketBoardResult> GetMarketDataAsync(List<uint> itemIds, CancellationToken cancellationToken = default)
+    public async Task<AggregatedMarketBoardResult> GetMarketDataAsync(
+        List<uint> itemIds,
+        CancellationToken cancellationToken = default
+    )
     {
         this.errorMessage = string.Empty;
         // Get player's home world ID
@@ -38,7 +38,8 @@ public sealed class UniversalisService : IDisposable
 
         // Normalize and deduplicate list
         var idsArray = itemIds.Where(id => id != 0).Distinct().ToList();
-        if (idsArray == null || idsArray.Count == 0) return new AggregatedMarketBoardResult { results = [], failedItems = [] };
+        if (idsArray == null || idsArray.Count == 0)
+            return new AggregatedMarketBoardResult { results = [], failedItems = [] };
 
         var results = new List<MarketBoardResult>();
         var newResults = new List<MarketBoardResult>();
@@ -65,21 +66,24 @@ public sealed class UniversalisService : IDisposable
             }
         }
 
-
-
         if (idsArray.Count != 0)
         {
-            this.errorMessage = "Error fetching market data from Universalis, falling back to store prices for missing items.";
+            this.errorMessage =
+                "Error fetching market data from Universalis, falling back to store prices for missing items.";
             Plugin.ChatGui.PrintError(this.errorMessage);
         }
-
 
         return new AggregatedMarketBoardResult { results = results, failedItems = idsArray };
     }
 
-    private async Task<(List<MarketBoardResult> results, List<uint> failed)> GetDataForWorldAsync(uint homeWorldId, List<uint> idsArray, CancellationToken cancellationToken)
+    private async Task<(List<MarketBoardResult> results, List<uint> failed)> GetDataForWorldAsync(
+        uint homeWorldId,
+        List<uint> idsArray,
+        CancellationToken cancellationToken
+    )
     {
-        if (idsArray.Count == 0) return ([], []);
+        if (idsArray.Count == 0)
+            return ([], []);
         var aggregatedResults = new List<MarketBoardResult>();
         var failed = new List<uint>();
 
@@ -89,7 +93,10 @@ public sealed class UniversalisService : IDisposable
             cancellationToken.ThrowIfCancellationRequested();
 
             var ids = string.Join(',', chunk);
-            using var response = await this.httpClient.GetAsync($"https://universalis.app/api/v2/aggregated/{homeWorldId}/{ids}", cancellationToken);
+            using var response = await this.httpClient.GetAsync(
+                $"https://universalis.app/api/v2/aggregated/{homeWorldId}/{ids}",
+                cancellationToken
+            );
 
             if (response.StatusCode != HttpStatusCode.OK)
             {
@@ -99,7 +106,10 @@ public sealed class UniversalisService : IDisposable
             }
 
             await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            var json = await JsonSerializer.DeserializeAsync<AggregatedMarketBoardResult>(responseStream, cancellationToken: cancellationToken);
+            var json = await JsonSerializer.DeserializeAsync<AggregatedMarketBoardResult>(
+                responseStream,
+                cancellationToken: cancellationToken
+            );
 
             if (json?.results != null)
             {
@@ -121,10 +131,12 @@ public sealed class UniversalisService : IDisposable
 
     public static double GetMarketValue(MarketBoardResult marketItem)
     {
-        var marketValue = marketItem.hq?.minListing?.dc?.price ??
-                         marketItem.nq?.minListing?.dc?.price ??
-                         marketItem.hq?.recentPurchase?.dc?.price ??
-                         marketItem.nq?.recentPurchase?.dc?.price ?? -1;
+        var marketValue =
+            marketItem.hq?.minListing?.dc?.price
+            ?? marketItem.nq?.minListing?.dc?.price
+            ?? marketItem.hq?.recentPurchase?.dc?.price
+            ?? marketItem.nq?.recentPurchase?.dc?.price
+            ?? -1;
 
         if (marketValue == -1)
         {

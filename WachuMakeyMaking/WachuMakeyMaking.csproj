@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Dalamud.NET.Sdk/14.0.1">
-  <PropertyGroup>
-    <Version>1.0.6.0</Version>
-    <AssemblyVersion>1.0.6.0</AssemblyVersion>
-    <FileVersion>1.0.6.0</FileVersion>
-    <InformationalVersion>1.0.6.0</InformationalVersion>
-    <PackageProjectUrl>https://github.com/ArcaneAj/WachuMakeyMaking</PackageProjectUrl>
-    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
-    <IsPackable>false</IsPackable>
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <PlatformTarget>x64</PlatformTarget>
+    <PropertyGroup>
+        <Version>1.0.6.0</Version>
+        <AssemblyVersion>1.0.6.0</AssemblyVersion>
+        <FileVersion>1.0.6.0</FileVersion>
+        <InformationalVersion>1.0.6.0</InformationalVersion>
+        <PackageProjectUrl>https://github.com/ArcaneAj/WachuMakeyMaking</PackageProjectUrl>
+        <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+        <IsPackable>false</IsPackable>
+        <TargetFramework>net10.0-windows</TargetFramework>
+        <PlatformTarget>x64</PlatformTarget>
 
-      <NoWarn>$(NoWarn);IDE0063</NoWarn>
-  </PropertyGroup>
+        <NoWarn>$(NoWarn);IDE0063</NoWarn>
+    </PropertyGroup>
 </Project>

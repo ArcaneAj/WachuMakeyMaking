@@ -1,6 +1,6 @@
+using System.Collections.Generic;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
-using System.Collections.Generic;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Utils;
 
@@ -26,14 +26,17 @@ public class CollectableService
 
         foreach (var shop in collectablesShops)
         {
-            if (shop.RowId != 3866626) continue;
+            if (shop.RowId != 3866626)
+                continue;
 
             foreach (var row in shop.ShopItems)
             {
                 var shopItems = collectablesShopItems.GetRow(row.RowId);
                 foreach (var shopItem in shopItems)
                 {
-                    var shopRewardScrip = collectablesShopRewardScrip.GetRow(shopItem.CollectablesShopRewardScrip.RowId);
+                    var shopRewardScrip = collectablesShopRewardScrip.GetRow(
+                        shopItem.CollectablesShopRewardScrip.RowId
+                    );
                     uint currency = 0;
                     unsafe
                     {
@@ -43,7 +46,11 @@ public class CollectableService
                     var currencyItem = itemSheet.GetRow(currency).ToMod();
                     var shopItemMod = itemSheet.GetRow(shopItem.Item.RowId).ToMod();
 
-                    this.collectablesCache[shopItemMod] = new ModItemStack(currencyItem, currency, shopRewardScrip.HighReward);
+                    this.collectablesCache[shopItemMod] = new ModItemStack(
+                        currencyItem,
+                        currency,
+                        shopRewardScrip.HighReward
+                    );
                 }
             }
         }
@@ -84,6 +91,5 @@ public class CollectableService
         }
 
         return (false, new ModItem(0, ""), 0);
-
     }
 }

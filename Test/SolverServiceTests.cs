@@ -1,9 +1,8 @@
-
+using System.Reflection;
+using System.Text.Json;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
 using static WachuMakeyMaking.Services.SolverService;
-using System.Text.Json;
-using System.Reflection;
 
 namespace Test
 {
@@ -68,12 +67,7 @@ namespace Test
 
         private record TestData(List<TestRecipe> Recipes, List<TestResource> Resources);
 
-        private record TestRecipe(
-            TestItem Item,
-            List<TestIngredient> Ingredients,
-            double Value,
-            TestItem Currency
-        );
+        private record TestRecipe(TestItem Item, List<TestIngredient> Ingredients, double Value, TestItem Currency);
 
         private record TestResource(TestItem Item, int Quantity);
 

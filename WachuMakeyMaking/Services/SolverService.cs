@@ -1,8 +1,8 @@
-using WachuMakeyMaking.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using WachuMakeyMaking.Models;
 
 namespace WachuMakeyMaking.Services
 {
@@ -25,7 +25,7 @@ namespace WachuMakeyMaking.Services
             Finished,
             Optimal,
             Unbounded,
-            Error
+            Error,
         }
 
         public void RegisterProgressListener(Action<State, string, Solution?> listener)
@@ -82,7 +82,9 @@ namespace WachuMakeyMaking.Services
                     var row = recipes.Select(recipe => (int)recipe.Ingredients.GetValueOrDefault(resource.Item));
                     assignmentsList.Add([.. row]);
 
-                    var recipesUsingResource = recipes.Where(recipe => recipe.Ingredients.ContainsKey(resource.Item)).ToList();
+                    var recipesUsingResource = recipes
+                        .Where(recipe => recipe.Ingredients.ContainsKey(resource.Item))
+                        .ToList();
                 }
 
                 var branches = new Stack<Branch>();
@@ -119,7 +121,6 @@ namespace WachuMakeyMaking.Services
                 {
                     UpdateProgress(State.Error, "No optimal solution found.");
                 }
-
             }
             catch (OperationCanceledException)
             {
@@ -131,7 +132,10 @@ namespace WachuMakeyMaking.Services
 
         private bool BranchAndBound(Problem problem, Solution previousResult, CancellationToken cancellationToken)
         {
-            var valuesToBranch = previousResult.Values.Select((val, index) => (val, index)).Where(x => x.val - Math.Floor(x.val) > 1e-10).ToList();
+            var valuesToBranch = previousResult
+                .Values.Select((val, index) => (val, index))
+                .Where(x => x.val - Math.Floor(x.val) > 1e-10)
+                .ToList();
 
             // If we're integral, check if this is the best solution so far
             if (valuesToBranch.Count == 0)
@@ -152,11 +156,13 @@ namespace WachuMakeyMaking.Services
             }
 
             // Branch on the least fractional variable (closest to an integer)
-            var branchVar = valuesToBranch.OrderBy(x =>
-            {
-                var frac = x.val - Math.Floor(x.val);
-                return Math.Min(frac, 1 - frac); // Distance to nearest integer
-            }).First();
+            var branchVar = valuesToBranch
+                .OrderBy(x =>
+                {
+                    var frac = x.val - Math.Floor(x.val);
+                    return Math.Min(frac, 1 - frac); // Distance to nearest integer
+                })
+                .First();
 
             var floorVal = (int)Math.Floor(branchVar.val);
             var ceilVal = (int)Math.Ceiling(branchVar.val);
@@ -178,7 +184,9 @@ namespace WachuMakeyMaking.Services
                 var feasible = positiveResult.Values[branchVar.index] <= floorVal + 1e-10;
                 if (!feasible)
                 {
-                    this.log($"Branch constraint violated: x[{branchVar.index}] = {positiveResult.Values[branchVar.index]} > {floorVal}, skipping");
+                    this.log(
+                        $"Branch constraint violated: x[{branchVar.index}] = {positiveResult.Values[branchVar.index]} > {floorVal}, skipping"
+                    );
                 }
                 else
                 {
@@ -187,7 +195,8 @@ namespace WachuMakeyMaking.Services
                     {
                         if (this.currentBest != null)
                         {
-                            var message = $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
+                            var message =
+                                $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
                             this.progressMessage = message;
                             UpdateProgress(State.Optimising, message, this.currentBest);
                         }
@@ -208,7 +217,9 @@ namespace WachuMakeyMaking.Services
                 var feasible = negativeResult.Values[branchVar.index] >= ceilVal - 1e-10;
                 if (!feasible)
                 {
-                    this.log($"Branch constraint violated: x[{branchVar.index}] = {negativeResult.Values[branchVar.index]} < {ceilVal}, skipping");
+                    this.log(
+                        $"Branch constraint violated: x[{branchVar.index}] = {negativeResult.Values[branchVar.index]} < {ceilVal}, skipping"
+                    );
                 }
                 else
                 {
@@ -217,7 +228,8 @@ namespace WachuMakeyMaking.Services
                     {
                         if (this.currentBest != null)
                         {
-                            var message = $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
+                            var message =
+                                $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
                             this.progressMessage = message;
                             UpdateProgress(State.Optimising, message, this.currentBest);
                         }
@@ -234,7 +246,11 @@ namespace WachuMakeyMaking.Services
             try
             {
                 // Validate input dimensions
-                if (problem.Assignments.Length == 0 || problem.Assignments[0].Length == 0 || problem.Assignments.Any(x => x.Length != problem.Assignments[0].Length))
+                if (
+                    problem.Assignments.Length == 0
+                    || problem.Assignments[0].Length == 0
+                    || problem.Assignments.Any(x => x.Length != problem.Assignments[0].Length)
+                )
                 {
                     return new Solution([], 0, State.Error, branches);
                 }
@@ -343,7 +359,8 @@ namespace WachuMakeyMaking.Services
             int m,
             int[] basis,
             double[] x,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken
+        )
         {
             cancellationToken.ThrowIfCancellationRequested();
             // Initialize basis inverse (identity matrix)
@@ -537,21 +554,19 @@ namespace WachuMakeyMaking.Services
 
     public record Problem(int[][] Assignments, double[] Costs, int[] Constraints);
 
-    public record Solution(
-        List<double> Values,
-        double OptimalValue,
-        SolverService.State State,
-        Stack<Branch> Branches)
+    public record Solution(List<double> Values, double OptimalValue, SolverService.State State, Stack<Branch> Branches)
     {
         public virtual bool Equals(Solution? other)
         {
-            if (other is null) return false;
-            if (ReferenceEquals(this, other)) return true;
+            if (other is null)
+                return false;
+            if (ReferenceEquals(this, other))
+                return true;
 
-            return State == other.State &&
-                   Math.Abs(OptimalValue - other.OptimalValue) < 1e-10 &&
-                   Values.SequenceEqual(other.Values) &&
-                   Branches.SequenceEqual(other.Branches);
+            return State == other.State
+                && Math.Abs(OptimalValue - other.OptimalValue) < 1e-10
+                && Values.SequenceEqual(other.Values)
+                && Branches.SequenceEqual(other.Branches);
         }
 
         public override int GetHashCode()
