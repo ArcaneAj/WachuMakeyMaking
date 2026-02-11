@@ -1,18 +1,21 @@
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Numerics;
-using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.Inventory;
 using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Dalamud.Interface;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
+using Dalamud.Plugin.Ipc;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
+using System.Numerics;
+using System.Threading.Tasks;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
 
@@ -76,6 +79,8 @@ public sealed class MainWindow : Window, IDisposable
         Plugin.GameInventory.InventoryChanged += OnInventoryChanged;
 
         this.allIngredients = [.. recipeCacheService.FindRecipes().Values.SelectMany(x => x.Ingredients.Keys)];
+        CraftimizerAvailable = Plugin.PluginInterface.GetIpcSubscriber<bool>("Craftimizer.IsAvailable");
+        OpenMacroEditor = Plugin.PluginInterface.GetIpcSubscriber<ushort, bool>("Craftimizer.OpenMacroEditor");
     }
 
     public void Dispose()
@@ -84,9 +89,20 @@ public sealed class MainWindow : Window, IDisposable
         Plugin.GameInventory.InventoryChanged -= OnInventoryChanged;
     }
 
+    private static readonly GameInventoryType[] InventoriesToCheck = [
+        GameInventoryType.Inventory1,
+        GameInventoryType.Inventory2,
+        GameInventoryType.Inventory3,
+        GameInventoryType.Inventory4,
+        GameInventoryType.Crystals,
+    ];
+
     private void OnInventoryChanged(IReadOnlyCollection<InventoryEventArgs> events)
     {
-        ResetResourceOverrides();
+        if (events.Any(x => InventoriesToCheck.Contains(x.Item.ContainerType)) || events.Count == 0)
+        {
+            ResetResourceOverrides();
+        }
     }
 
     private void ResetSolver()
@@ -415,6 +431,8 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.SameLine();
         }
     }
+    private ICallGateSubscriber<ushort, bool> OpenMacroEditor { get; }
+    public ICallGateSubscriber<bool> CraftimizerAvailable { get; }
 
     // Attempt to open the crafting log on the recipe for `itemId`.
     // Implementation details differ between client versions — this helper:
@@ -422,15 +440,46 @@ public sealed class MainWindow : Window, IDisposable
     // 2) calls into the game's UI/agent to open the recipe UI (placeholder)
     // You must hook the exact agent/function from your FFXIVClientStructs version.
     // If you don't have client structs available, you can leave this as a no-op or log.
-    private static void OpenRecipeInCraftingLog(uint recipeId)
+    private void OpenRecipeInCraftingLog(uint recipeId)
     {
-        // Find a recipe whose result item matches this itemId
-        var recipeSheet = Plugin.DataManager.GetExcelSheet<Recipe>();
-        var recipe = recipeSheet.GetRow(recipeId);
+        var canUseCraftimizer = CraftimizerAvailable.InvokeFunc();
+        if (canUseCraftimizer)
+        {
+            var success = OpenMacroEditor.InvokeFunc((ushort)recipeId);
+        }
+        else
+        {
+            // Find a recipe whose result item matches this itemId
+            var recipeSheet = Plugin.DataManager.GetExcelSheet<Recipe>();
+            var recipe = recipeSheet.GetRow(recipeId);
+            var matchingGearSets = EnumerateGearSets().Where(x => x.JobId == recipe.CraftType.RowId);
+            if (!matchingGearSets.Any()) throw new Exception($"No gearset found for job {recipe.CraftType.RowId}");
+            unsafe
+            {
+                RaptureGearsetModule.Instance()->EquipGearset(matchingGearSets.First().GearSetId);
+                AgentRecipeNote.Instance()->OpenRecipeByRecipeId(recipe.RowId);
+            }
+        }
+
+    }
+
+    private static List<(int GearSetId, int JobId)> EnumerateGearSets()
+    {
+        var gearSetJobs = new List<(int GearSetId, int JobId)>();
         unsafe
         {
-            AgentRecipeNote.Instance()->OpenRecipeByRecipeId(recipe.RowId);
+            var gearsetModule = RaptureGearsetModule.Instance();
+            var i = -1;
+            foreach (ref var gearset in gearsetModule->Entries)
+            {
+                i++;
+                if (!gearset.Flags.HasFlag(RaptureGearsetModule.GearsetFlag.Exists) || gearset.Flags.HasFlag(RaptureGearsetModule.GearsetFlag.MainHandMissing))
+                    continue;
+                gearSetJobs.Add((i, gearset.ClassJob - 8));
+            }
         }
+
+        return gearSetJobs;
     }
 
     private ModItemStack[] ApplyOverrides(ModItemStack[] allDisplayResources)
