@@ -1,9 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Numerics;
-using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Dalamud.Interface;
@@ -12,7 +6,14 @@ using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
+using System.Numerics;
+using System.Threading.Tasks;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
 
@@ -422,15 +423,38 @@ public sealed class MainWindow : Window, IDisposable
     // 2) calls into the game's UI/agent to open the recipe UI (placeholder)
     // You must hook the exact agent/function from your FFXIVClientStructs version.
     // If you don't have client structs available, you can leave this as a no-op or log.
-    private static void OpenRecipeInCraftingLog(uint recipeId)
+    private void OpenRecipeInCraftingLog(uint recipeId)
     {
         // Find a recipe whose result item matches this itemId
         var recipeSheet = Plugin.DataManager.GetExcelSheet<Recipe>();
         var recipe = recipeSheet.GetRow(recipeId);
+        var matchingGearSets = EnumerateGearSets().Where(x => x.JobId == recipe.CraftType.RowId);
+        if (!matchingGearSets.Any()) throw new Exception($"No gearset found for job {recipe.CraftType.RowId}");
         unsafe
         {
+            RaptureGearsetModule.Instance()->EquipGearset(matchingGearSets.First().GearSetId);
             AgentRecipeNote.Instance()->OpenRecipeByRecipeId(recipe.RowId);
         }
+
+    }
+
+    private static List<(int GearSetId, int JobId)> EnumerateGearSets()
+    {
+        var gearSetJobs = new List<(int GearSetId, int JobId)>();
+        unsafe
+        {
+            var gearsetModule = RaptureGearsetModule.Instance();
+            var i = -1;
+            foreach (ref var gearset in gearsetModule->Entries)
+            {
+                i++;
+                if (!gearset.Flags.HasFlag(RaptureGearsetModule.GearsetFlag.Exists) || gearset.Flags.HasFlag(RaptureGearsetModule.GearsetFlag.MainHandMissing))
+                    continue;
+                gearSetJobs.Add((i, gearset.ClassJob - 8));
+            }
+        }
+
+        return gearSetJobs;
     }
 
     private ModItemStack[] ApplyOverrides(ModItemStack[] allDisplayResources)
