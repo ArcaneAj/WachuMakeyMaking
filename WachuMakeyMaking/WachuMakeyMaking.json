@@ -1,8 +1,10 @@
 {
   "Author": "Nesrie",
   "Name": "WachuMakeyMaking?",
+  "InternalName": "WachuMakeyMaking",
+  "RepoUrl": "https://github.com/ArcaneAj/WachuMakeyMaking",
   "Punchline": "A mod that calculates what you can do with what you have.",
-  "Description": "/wymm takes what you have in your inventory and calculates the optimal combination of items to make. Item prices are fetched from Universalis, or can be manually overridden.",
+  "Description": "WachuMakeyMaking takes what you have in your inventory and calculates the optimal combination of items to make. Item prices are fetched from Universalis, or can be manually overridden.",
   "ApplicableVersion": "any",
   "Tags": [
     "crafting"

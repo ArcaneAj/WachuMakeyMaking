@@ -60,7 +60,7 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.AddHandler(
             CommandName,
-            new CommandInfo(OnCommand) { HelpMessage = "\"/wymm\" can be used to toggle the window open/closed" }
+            new CommandInfo(OnCommand) { HelpMessage = "toggles the window open/closed" }
         );
 
         // Tell the UI system that we want our windows to be drawn through the window system
