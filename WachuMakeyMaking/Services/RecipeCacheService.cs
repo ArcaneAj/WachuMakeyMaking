@@ -1,12 +1,12 @@
+using Dalamud.Bindings.ImGui;
+using Dalamud.Game.Inventory;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Dalamud.Bindings.ImGui;
-using Dalamud.Game.Inventory;
-using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using Lumina.Excel.Sheets;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Utils;
 
@@ -35,6 +35,8 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
     private CancellationTokenSource cancellationTokenSource = new();
     private ModItemStack[] items = [];
     private ModItemStack[] crystals = [];
+
+    private readonly Dictionary<ulong, List<ModItemStack>> inventoryCache = [];
 
     public void ForceRefresh(ModItemStack[] modItemStacks)
     {
@@ -219,9 +221,9 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
         return [.. GetItemsFromInventory(GameInventoryType.Crystals)];
     }
 
-    public static List<ModItemStack> GetConsolidatedItems()
+    public List<ModItemStack> GetConsolidatedItems()
     {
-        var allItems = new List<ModItemStack>();
+        var allItems = GetCrystals();
 
         var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
 
@@ -230,6 +232,39 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
         allItems.AddRange(GetItemsFromInventory(GameInventoryType.Inventory2));
         allItems.AddRange(GetItemsFromInventory(GameInventoryType.Inventory3));
         allItems.AddRange(GetItemsFromInventory(GameInventoryType.Inventory4));
+        allItems.AddRange(GetItemsFromInventory(GameInventoryType.SaddleBag1));
+        allItems.AddRange(GetItemsFromInventory(GameInventoryType.SaddleBag2));
+        allItems.AddRange(GetItemsFromInventory(GameInventoryType.PremiumSaddleBag1));
+        allItems.AddRange(GetItemsFromInventory(GameInventoryType.PremiumSaddleBag2));
+
+        // Try get retainer items if open
+        // Cache them between openings so we remember what was in them even if they get closed
+        ulong retainerId;
+        unsafe
+        {
+            var clientInterfaceUiModule = FFXIVClientStructs.FFXIV.Client.System.Framework.Framework.Instance()->UIModule->GetItemOrderModule();
+            var module = clientInterfaceUiModule;
+            retainerId = module != null ? module->ActiveRetainerId : 0;
+        }
+
+        if (retainerId != 0)
+        {
+            Plugin.Log.Info($"Active retainer ID: {retainerId}");
+            if (!this.inventoryCache.ContainsKey(retainerId))
+            {
+                var cachedItems = GetItemsFromInventory(GameInventoryType.RetainerCrystals);
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage1));
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage2));
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage3));
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage4));
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage5));
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage6));
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage7));
+                this.inventoryCache[retainerId] = cachedItems;
+            }
+        }
+
+        allItems.AddRange(this.inventoryCache.Values.SelectMany(x => x));
 
         // Consolidate items with the same ID
         var consolidatedItems = allItems

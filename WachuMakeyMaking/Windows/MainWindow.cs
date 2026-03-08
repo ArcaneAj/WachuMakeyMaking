@@ -108,11 +108,11 @@ public sealed class MainWindow : Window, IDisposable
 
     private void ResetResourceOverrides()
     {
-        var actualCrystals = RecipeCacheService.GetCrystals();
-        var actualItems = RecipeCacheService.GetConsolidatedItems();
+        Plugin.Log.Info("Inventory changed, resetting resource overrides");
+        var actualItems = this.recipeCacheService.GetConsolidatedItems();
         this.allDisplayResources =
         [
-            .. actualItems.Concat(actualCrystals).Where(x => this.allIngredients.Contains(x.Item)),
+            .. actualItems.Where(x => this.allIngredients.Contains(x.Item)),
         ];
         this.inventoryDict = this.allDisplayResources.ToDictionary(x => x.Item, x => x);
         this.resourceQuantityOverrides.Clear();

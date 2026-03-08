@@ -1,20 +1,20 @@
 [
-  {
-    "Author": "Nesrie",
-    "Name": "WachuMakeyMaking?",
-    "Description": "WachuMakeyMaking takes what you have in your inventory and calculates the optimal combination of items to make. Item prices are fetched from Universalis, or can be manually overridden.",
-    "InternalName": "WachuMakeyMaking",
-    "AssemblyVersion": "1.0.7.0",
-    "TestingAssemblyVersion": null,
-    "RepoUrl": "https://github.com/ArcaneAj/WachuMakeyMaking",
-    "ApplicableVersion": "any",
-    "DalamudApiLevel": 14,
-    "Punchline": "Optimise what you make with what you have.",
-    "IsHide": false,
-    "IsTestingExclusive": false,
-    "DownloadLinkInstall": "https://github.com/ArcaneAj/WachuMakeyMaking/releases/latest/download/latest.zip",
-    "DownloadLinkTesting": "https://github.com/ArcaneAj/WachuMakeyMaking/releases/latest/download/latest.zip",
-    "DownloadLinkUpdate": "https://github.com/ArcaneAj/WachuMakeyMaking/releases/latest/download/latest.zip",
-    "LastUpdate": "1769069376"
-  }
+    {
+        "Author": "Nesrie",
+        "Name": "WachuMakeyMaking?",
+        "Description": "WachuMakeyMaking takes what you have in your inventory and calculates the optimal combination of items to make. Item prices are fetched from Universalis, or can be manually overridden.",
+        "InternalName": "WachuMakeyMaking",
+        "AssemblyVersion": "1.0.8.0",
+        "TestingAssemblyVersion": null,
+        "RepoUrl": "https://github.com/ArcaneAj/WachuMakeyMaking",
+        "ApplicableVersion": "any",
+        "DalamudApiLevel": 14,
+        "Punchline": "Optimise what you make with what you have.",
+        "IsHide": false,
+        "IsTestingExclusive": false,
+        "DownloadLinkInstall": "https://github.com/ArcaneAj/WachuMakeyMaking/releases/latest/download/latest.zip",
+        "DownloadLinkTesting": "https://github.com/ArcaneAj/WachuMakeyMaking/releases/latest/download/latest.zip",
+        "DownloadLinkUpdate": "https://github.com/ArcaneAj/WachuMakeyMaking/releases/latest/download/latest.zip",
+        "LastUpdate": "1769069376"
+    }
 ]
