@@ -107,11 +107,8 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
                 .DistinctBy(r => r.Item.Name.ToString()) // Remove duplicates by result item name
                 .ToList();
 
-            // Update progress to indicate we're moving to the API phase
-            CurrentProcessingStep = "Fetching market prices...";
-
-            // Create cancellation token with 10-second timeout
-            using var timedCancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            // Create cancellation token with 2-minute timeout
+            using var timedCancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             var timedCancellationToken = timedCancellationTokenSource.Token;
 
             // And combine it with our task level cancellation
@@ -147,10 +144,14 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
                 itemsWithoutValue.Remove(collectableRecipe.Item.RowId);
             }
 
+            // Update progress to indicate we're moving to the API phase
+            CurrentProcessingStep = $"Fetching market prices... 0 complete, 0 failed, {itemsWithoutValue.Count} remaining";
+
             try
             {
                 var marketData = await this.universalisService.GetMarketDataAsync(
                     itemsWithoutValue,
+                    (s) => CurrentProcessingStep = s,
                     apiCancellationToken
                 );
 

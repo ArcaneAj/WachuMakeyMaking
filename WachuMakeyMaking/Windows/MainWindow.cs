@@ -272,6 +272,17 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.EndCombo();
         }
 
+        //if (ImGui.Button("Mock"))
+        //{
+        //    filteredCandidates.Where(x => !x.Name.Contains("Cosmotized", StringComparison.OrdinalIgnoreCase)).Take(Math.Min(1000, filteredCandidates.Count)).ToList().ForEach(chosen =>
+        //    {
+        //        var list = new List<ModItemStack>(this.allDisplayResources ?? []) { new(chosen, chosen.RowId, 99) };
+        //        this.allDisplayResources = [.. list];
+        //        this.resourceSelections[chosen.RowId] = true;
+        //        this.resourceQuantityOverrides[chosen.RowId] = 99;
+        //    });
+        //}
+
         ImGuiHelpers.ScaledDummy(10.0f);
 
         // Prepare toggle state / counts used by header checkbox

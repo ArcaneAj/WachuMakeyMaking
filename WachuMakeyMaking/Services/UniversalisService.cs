@@ -29,6 +29,7 @@ public sealed class UniversalisService : IDisposable
 
     public async Task<AggregatedMarketBoardResult> GetMarketDataAsync(
         List<uint> itemIds,
+        Action<string> onIterationUpdate,
         CancellationToken cancellationToken = default
     )
     {
@@ -48,8 +49,8 @@ public sealed class UniversalisService : IDisposable
         for (var i = 0; i < MaxRetries; i++)
         {
             try
-            {
-                (newResults, idsArray) = await GetDataForWorldAsync(homeWorldId, idsArray, cancellationToken);
+            {   
+                (newResults, idsArray) = await GetDataForWorldAsync(homeWorldId, idsArray, onIterationUpdate, cancellationToken);
                 results.AddRange(newResults);
                 break;
             }
@@ -79,6 +80,7 @@ public sealed class UniversalisService : IDisposable
     private async Task<(List<MarketBoardResult> results, List<uint> failed)> GetDataForWorldAsync(
         uint homeWorldId,
         List<uint> idsArray,
+        Action<string> onIterationUpdate,
         CancellationToken cancellationToken
     )
     {
@@ -92,24 +94,7 @@ public sealed class UniversalisService : IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var ids = string.Join(',', chunk);
-            using var response = await this.httpClient.GetAsync(
-                $"https://universalis.app/api/v2/aggregated/{homeWorldId}/{ids}",
-                cancellationToken
-            );
-
-            if (response.StatusCode != HttpStatusCode.OK)
-            {
-                Plugin.Log.Warning($"Universalis returned status {response.StatusCode} for ids: {ids}");
-                failed.AddRange(chunk);
-                continue;
-            }
-
-            await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            var json = await JsonSerializer.DeserializeAsync<AggregatedMarketBoardResult>(
-                responseStream,
-                cancellationToken: cancellationToken
-            );
+            var json = await FetchChunk(chunk, homeWorldId, cancellationToken);
 
             if (json?.results != null)
             {
@@ -121,10 +106,33 @@ public sealed class UniversalisService : IDisposable
                 failed.AddRange(json.failedItems);
             }
 
-            await Task.Delay(50, cancellationToken); // brief pause to avoid rate limiting
+            onIterationUpdate($"Fetching market prices... {aggregatedResults.Count} complete, {failed.Count} failed, {idsArray.Count - aggregatedResults.Count - failed.Count} remaining");
         }
 
         return (aggregatedResults, failed);
+    }
+
+    private async Task<AggregatedMarketBoardResult?> FetchChunk(uint[] chunk, uint homeWorldId, CancellationToken cancellationToken = default)
+    {
+        var ids = string.Join(',', chunk);
+
+        await Task.Delay(50, cancellationToken); // brief pause to avoid rate limiting
+        using var response = await this.httpClient.GetAsync(
+            $"https://universalis.app/api/v2/aggregated/{homeWorldId}/{ids}",
+            cancellationToken
+        );
+
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            Plugin.Log.Warning($"Universalis returned status {homeWorldId} {response.StatusCode} {response.ReasonPhrase} {await response.Content.ReadAsStringAsync(cancellationToken)} for ids: {ids}");
+            return new AggregatedMarketBoardResult { results = [], failedItems = [.. chunk] };
+        }
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        return await JsonSerializer.DeserializeAsync<AggregatedMarketBoardResult>(
+            responseStream,
+            cancellationToken: cancellationToken
+        );
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
