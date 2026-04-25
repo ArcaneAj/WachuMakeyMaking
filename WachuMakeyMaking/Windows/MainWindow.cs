@@ -1,4 +1,5 @@
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.Inventory;
 using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Dalamud.Interface;
 using Dalamud.Interface.Textures;
@@ -87,7 +88,10 @@ public sealed class MainWindow : Window, IDisposable
 
     private void OnInventoryChanged(IReadOnlyCollection<InventoryEventArgs> events)
     {
-        ResetResourceOverrides();
+        if (events.Any(e => e.Type == GameInventoryEvent.Added || e.Type == GameInventoryEvent.Removed || e.Type == GameInventoryEvent.Changed))
+        {
+            ResetResourceOverrides();
+        }
     }
 
     private void ResetSolver()
@@ -128,7 +132,7 @@ public sealed class MainWindow : Window, IDisposable
         {
             this.allDisplayResources = [];
             this.inventoryDict = [];
-            OnInventoryChanged([]);
+            ResetResourceOverrides();
         }
 
         // Initialize cache if needed
