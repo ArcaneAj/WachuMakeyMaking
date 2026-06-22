@@ -90,7 +90,7 @@ public sealed class MainWindow : Window, IDisposable
     {
         if (events.Any(e => e.Type == GameInventoryEvent.Added || e.Type == GameInventoryEvent.Removed || e.Type == GameInventoryEvent.Changed))
         {
-            ResetResourceOverrides();
+            MergeInventoryChanges();
         }
     }
 
@@ -124,6 +124,75 @@ public sealed class MainWindow : Window, IDisposable
         ResetSolver();
         this.recipeCacheService.ForceRefresh(ApplyOverrides(this.allDisplayResources));
         ResetRecipeOverrides();
+    }
+
+    private void MergeInventoryChanges()
+    {
+        if (this.allDisplayResources == null || this.inventoryDict == null)
+        {
+            ResetResourceOverrides();
+            return;
+        }
+
+        var actualItems = this.recipeCacheService.GetConsolidatedItems()
+            .Where(x => this.allIngredients.Contains(x.Item))
+            .ToDictionary(x => x.Id, x => x);
+
+        var merged = new List<ModItemStack>();
+        foreach (var existing in this.allDisplayResources)
+        {
+            if (actualItems.TryGetValue(existing.Id, out var liveItem))
+            {
+                merged.Add(new ModItemStack(existing.Item, existing.Id, liveItem.Quantity));
+                actualItems.Remove(existing.Id);
+            }
+            else if (this.resourceQuantityOverrides.ContainsKey(existing.Id) || !this.resourceSelections.GetValueOrDefault(existing.Id, true))
+            {
+                // User has customized this row (manual quantity/added it, or explicitly unchecked it) - keep it
+                // even though it's no longer present in live inventory.
+                merged.Add(existing);
+            }
+            else
+            {
+                // Untouched row that genuinely left inventory - drop it, same as a full reset would.
+                this.resourceSelections.Remove(existing.Id);
+            }
+        }
+
+        // Anything left in actualItems is a newly-discovered ingredient that wasn't displayed before.
+        foreach (var newItem in actualItems.Values)
+        {
+            merged.Add(newItem);
+            this.resourceSelections[newItem.Id] = true;
+        }
+
+        var mergedArray = merged.ToArray();
+
+        // Refresh the "(N available)" annotation regardless of whether anything else changed.
+        this.inventoryDict = mergedArray.ToDictionary(x => x.Item, x => x);
+
+        if (AppliedResourcesEqual(ApplyOverrides(this.allDisplayResources), ApplyOverrides(mergedArray)))
+        {
+            return;
+        }
+
+        this.allDisplayResources = mergedArray;
+        this.recipeCacheService.ForceRefresh(ApplyOverrides(this.allDisplayResources));
+    }
+
+    private static bool AppliedResourcesEqual(ModItemStack[] before, ModItemStack[] after)
+    {
+        if (before.Length != after.Length)
+            return false;
+
+        var beforeById = before.ToDictionary(x => x.Id, x => x.Quantity);
+        foreach (var item in after)
+        {
+            if (!beforeById.TryGetValue(item.Id, out var quantity) || quantity != item.Quantity)
+                return false;
+        }
+
+        return true;
     }
 
     public override void Draw()
