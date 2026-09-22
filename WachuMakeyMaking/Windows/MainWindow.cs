@@ -363,39 +363,66 @@ public sealed partial class MainWindow : Window, IDisposable
             {
                 var categoryName = divisionCategory.Key;
                 var divisions = divisionCategory.Value;
-                var isDivisionCategoryChecked = this.divisionTags[categoryName].Any(x => x.Value);
-                if (ImGui.Checkbox($"##_RUF_{categoryName}", ref isDivisionCategoryChecked))
+
+                // Determine tri-state: all checked, none checked, or indeterminate (some checked)
+                var allChecked = divisions.All(x => x.Value);
+                var anyChecked = divisions.Any(x => x.Value);
+
+                // Use the "allChecked" value for the visible checkbox state. If the category is
+                // indeterminate (some but not all children selected) we'll draw a small "-" overlay
+                // to indicate the mixed state.
+                var headerChecked = allChecked;
+                if (ImGui.Checkbox($"##_RUF_{categoryName}", ref headerChecked))
                 {
+                    // Toggle all children to the new header state
                     foreach (var tag in this.divisionTags[categoryName])
                     {
-                        this.divisionTags[categoryName][tag.Key] = isDivisionCategoryChecked;
+                        this.divisionTags[categoryName][tag.Key] = headerChecked;
                     }
                 }
 
-                ImGui.SameLine();
-                ImGui.Text(categoryName);
-                var baseX = 0f;
-                for (var i = 0; i < divisions.Count; i++)
+                // If some children are selected but not all, render an indeterminate mark over the checkbox
+                if (anyChecked && !allChecked)
                 {
-                    var j = i % TAG_COLS;
-                    if (i == 0)
-                    {
-                        baseX = ImGui.GetCursorPosX() + 25f;
-                    }
+                    var drawList = ImGui.GetWindowDrawList();
+                    var itemMin = ImGui.GetItemRectMin();
+                    var itemMax = ImGui.GetItemRectMax();
+                    var style = ImGui.GetStyle();
 
-                    ImGui.SetCursorPosX(baseX + j * TAG_COL_WIDTH);
-                    var division = divisions.ElementAt(i);
-                    var divisionName = division.Key.Name.ToString();
-                    var isChecked = division.Value;
-                    if (ImGui.Checkbox($"##_RUF_{categoryName}_{divisionName}", ref isChecked))
+                    // Position the small horizontal bar inside the checkbox square. FramePadding.X is
+                    // used to approximate the left edge of the checkbox box inside the item rectangle.
+                    var barLeft = new Vector2(itemMin.X + style.FramePadding.X, (itemMin.Y + itemMax.Y) / 2f - 1.0f);
+                    var barRight = new Vector2(itemMin.X + style.FramePadding.X + 15.0f, (itemMin.Y + itemMax.Y) / 2f + 1.0f);
+                    var col = ImGui.GetColorU32(ImGuiCol.Text);
+                    drawList.AddRectFilled(barLeft, barRight, col, 1.0f);
+                }
+
+                ImGui.SameLine();
+                if (ImGui.CollapsingHeader(categoryName))
+                {
+                    var baseX = 0f;
+                    for (var i = 0; i < divisions.Count; i++)
                     {
-                        this.divisionTags[categoryName][division.Key] = isChecked;
-                    }
-                    ImGui.SameLine();
-                    ImGui.Text(divisionName);
-                    if (i < divisions.Count - 1 && (i + 1) % TAG_COLS != 0)
-                    {
+                        var j = i % TAG_COLS;
+                        if (i == 0)
+                        {
+                            baseX = ImGui.GetCursorPosX() + 25f;
+                        }
+
+                        ImGui.SetCursorPosX(baseX + j * TAG_COL_WIDTH);
+                        var division = divisions.ElementAt(i);
+                        var divisionName = division.Key.Name.ToString();
+                        var isChecked = division.Value;
+                        if (ImGui.Checkbox($"##_RUF_{categoryName}_{divisionName}", ref isChecked))
+                        {
+                            this.divisionTags[categoryName][division.Key] = isChecked;
+                        }
                         ImGui.SameLine();
+                        ImGui.Text(divisionName);
+                        if (i < divisions.Count - 1 && (i + 1) % TAG_COLS != 0)
+                        {
+                            ImGui.SameLine();
+                        }
                     }
                 }
             }
