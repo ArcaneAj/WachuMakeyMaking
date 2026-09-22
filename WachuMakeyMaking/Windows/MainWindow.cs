@@ -14,13 +14,14 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Numerics;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
 
 namespace WachuMakeyMaking.Windows;
 
-public sealed class MainWindow : Window, IDisposable
+public sealed partial class MainWindow : Window, IDisposable
 {
     private readonly RecipeCacheService recipeCacheService;
     private readonly SolverService solverService;
@@ -58,8 +59,16 @@ public sealed class MainWindow : Window, IDisposable
 
     // Filter text the user can type to narrow candidates
     private string resourceAddFilter = string.Empty;
+    private Dictionary<string, Dictionary<ModNotebookDivision, bool>> divisionTags;
+    private Dictionary<ModItem, HashSet<uint>> ingredientDivisions;
+    private HashSet<ModItem> ingredientsUsable;
+    private const int MAX_LEVEL = 100;
+    private const int TAG_COLS = 4;
+    private const float TAG_COL_WIDTH = 200f;
 
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     public MainWindow(RecipeCacheService recipeCacheService, SolverService solverService)
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
         : base($"{Plugin.Name}?##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
         this.SizeConstraints = new WindowSizeConstraints
@@ -77,7 +86,73 @@ public sealed class MainWindow : Window, IDisposable
         // Subscribe to inventory changes
         Plugin.GameInventory.InventoryChanged += OnInventoryChanged;
 
-        this.allIngredients = [.. recipeCacheService.FindRecipes().Values.SelectMany(x => x.Ingredients.Keys)];
+        var recipes = this.recipeCacheService.FindRecipes().Values;
+
+        SetupDivisions(recipes);
+        SetupUsability(recipes);
+
+        this.allIngredients = [.. recipes.SelectMany(x => x.Ingredients.Keys)];
+
+        Plugin.Log.Warning($"Found {this.allIngredients.Count} distinct ingredients across all recipes");
+    }
+
+    private void SetupUsability(Dictionary<uint, ModRecipe>.ValueCollection recipes)
+    {
+        var ingredientsUsable = new HashSet<ModItem>();
+        foreach (var recipe in recipes.Where(x => RecipeCacheService.HasRequirementsForRecipe(x)))
+        {
+            foreach (var ingredient in recipe.Ingredients.Keys){
+                ingredientsUsable.Add(ingredient);
+            }
+        }
+
+        this.ingredientsUsable = ingredientsUsable;
+    }
+
+    private void SetupDivisions(Dictionary<uint, ModRecipe>.ValueCollection recipes)
+    {
+        var ingredientDivisions = new Dictionary<ModItem, HashSet<uint>>();
+        foreach (var recipe in recipes)
+        {
+            foreach (var ingredient in recipe.Ingredients.Keys)
+            {
+                if (!ingredientDivisions.TryGetValue(ingredient, out var divisions))
+                {
+                    divisions = [];
+                    ingredientDivisions[ingredient] = divisions;
+                }
+
+                divisions.Add(recipe.noteBookDivisionId);
+            }
+        }
+
+        this.ingredientDivisions = ingredientDivisions;
+        var divisionCategorySheet = Plugin.DataManager.GetExcelSheet<NotebookDivisionCategory>();
+        var divisionSheet = Plugin.DataManager.GetExcelSheet<NotebookDivision>();
+        var levellingDivisions = divisionSheet.Where(
+            x => x.NotebookDivisionCategory.RowId == 0 &&
+            x.Name.ToString().Length > 0 &&
+            char.IsDigit(x.Name.ToString()[0]) &&
+            TryParseInt(x.Name.ToString(), MAX_LEVEL) < MAX_LEVEL)
+            .Select(x => new ModNotebookDivision(x));
+        var masterworkDivisions = divisionSheet.Where(x => x.NotebookDivisionCategory.RowId == 1)
+            .Select(x => new ModNotebookDivision(x))
+            .OrderBy(x => IsInteger().Split(x.Name.Replace("(", "").Replace(")", "")).Select(chunk => new ChunkWrapper(chunk)), new ChunkComparer());
+        var housingDivisions = divisionSheet.Where(x => x.NotebookDivisionCategory.RowId == 2)
+            .Select(x => new ModNotebookDivision(x));
+
+        var divisionTags = new Dictionary<string, Dictionary<ModNotebookDivision, bool>>()
+        {
+            ["Standard"] = levellingDivisions.ToDictionary(x => x, x => true),
+            [divisionCategorySheet.GetRow(1).Name.ToString()] = masterworkDivisions.ToDictionary(x => x, x => true),
+            [divisionCategorySheet.GetRow(2).Name.ToString()] = housingDivisions.ToDictionary(x => x, x => true),
+            ["Other"] = new()
+            {
+                [new ModNotebookDivision(null, "Other")] = true,
+            },
+        };
+
+        this.divisionTags = divisionTags;
     }
 
     public void Dispose()
@@ -279,27 +354,62 @@ public sealed class MainWindow : Window, IDisposable
 
         var selectedItems = this.allDisplayResources.Count(r => this.resourceSelections.GetValueOrDefault(r.Id, false));
         ImGui.Text($"{this.allDisplayResources.Length} resources found with recipes ({selectedItems} selected)");
+        List<ModItem> filteredCandidates;
+        ImGuiHelpers.ScaledDummy(5.0f);
 
-        ImGuiHelpers.ScaledDummy(10.0f);
+        if (ImGui.CollapsingHeader("Resource usage filters"))
+        {
+            foreach (var divisionCategory in this.divisionTags)
+            {
+                var categoryName = divisionCategory.Key;
+                var divisions = divisionCategory.Value;
+                var isDivisionCategoryChecked = this.divisionTags[categoryName].Any(x => x.Value);
+                if (ImGui.Checkbox($"##_RUF_{categoryName}", ref isDivisionCategoryChecked))
+                {
+                    foreach (var tag in this.divisionTags[categoryName])
+                    {
+                        this.divisionTags[categoryName][tag.Key] = isDivisionCategoryChecked;
+                    }
+                }
 
-        var presentItems = new HashSet<uint>(this.allDisplayResources?.Select(x => x.Id) ?? []);
-        var candidates = this.allIngredients.Where(x => !presentItems.Contains(x.RowId)).OrderBy(x => x.Name).ToList();
+                ImGui.SameLine();
+                ImGui.Text(categoryName);
+                var baseX = 0f;
+                for (var i = 0; i < divisions.Count; i++)
+                {
+                    var j = i % TAG_COLS;
+                    if (i == 0)
+                    {
+                        baseX = ImGui.GetCursorPosX() + 25f;
+                    }
+
+                    ImGui.SetCursorPosX(baseX + j * TAG_COL_WIDTH);
+                    var division = divisions.ElementAt(i);
+                    var divisionName = division.Key.Name.ToString();
+                    var isChecked = division.Value;
+                    if (ImGui.Checkbox($"##_RUF_{categoryName}_{divisionName}", ref isChecked))
+                    {
+                        this.divisionTags[categoryName][division.Key] = isChecked;
+                    }
+                    ImGui.SameLine();
+                    ImGui.Text(divisionName);
+                    if (i < divisions.Count - 1 && (i + 1) % TAG_COLS != 0)
+                    {
+                        ImGui.SameLine();
+                    }
+                }
+            }
+        }
+
+        ImGuiHelpers.ScaledDummy(5.0f);
+
+        filteredCandidates = FilterResourcesCandidates();
 
         // Filter textbox for candidate list
         ImGui.Text("Add resource:");
         ImGui.SameLine();
         ImGui.SetNextItemWidth(250.0f);
         if (ImGui.InputText("##resource_filter", ref this.resourceAddFilter, 256)) { }
-
-        // Apply the filter (case-insensitive) to the candidate list.
-        var filteredCandidates = string.IsNullOrWhiteSpace(this.resourceAddFilter)
-            ? candidates
-            :
-            [
-                .. candidates.Where(x =>
-                    x.Name.ToString().Contains(this.resourceAddFilter, StringComparison.OrdinalIgnoreCase)
-                ),
-            ];
 
         // Current display name for combo (from filtered list)
         var currentName = filteredCandidates.Count > 0 ? filteredCandidates[0].Name : "Select...";
@@ -966,5 +1076,107 @@ public sealed class MainWindow : Window, IDisposable
         this.solverState = state;
         this.solverProgressMessage = message;
         this.currentSolution = solution;
+    }
+
+    private List<ModItem> FilterResourcesCandidates()
+    {
+        var presentItems = new HashSet<uint>(this.allDisplayResources?.Select(x => x.Id) ?? []);
+        var candidates = this.allIngredients.Where(x => !presentItems.Contains(x.RowId)).OrderBy(x => x.Name).ToList();
+
+        // Otherwise, filter by selected divisions
+        var selectedDivisions = this.divisionTags
+            .SelectMany(category => category.Value.Where(tag => tag.Value).Select(tag => tag.Key))
+            .Where(division => division.Division != null)
+            .ToHashSet();
+        candidates = [.. candidates.Where(item =>
+        {
+            // If the item has no divisions, it doesn't match any selected division.
+            if (!this.ingredientDivisions.TryGetValue(item, out var divisions) || divisions.Count == 0)
+            {
+                // If the user has selected the "Other" division, include items with no divisions.
+                return this.divisionTags["Other"].First().Value;
+            }
+
+            // If it has divisions, check if any of them match the selected divisions.
+            var matches = selectedDivisions.Select(x => x.RowId).Intersect(divisions).Any();
+
+            var allDivisionIds = this.divisionTags.SelectMany(category => category.Value.Select(tag => tag.Key.RowId)).ToHashSet();
+            // If the user has selected the "Other" division, include items with divisions not in the possible division ids
+            return matches || (this.divisionTags["Other"].First().Value && !divisions.All(x => allDivisionIds.Contains(x)));
+        })];
+
+        // Only include items that are usable based on the recipe requirements. e.g. it's used in at least 1 recipe we know how to craft.
+        candidates = candidates
+            .Where(x => this.ingredientsUsable.Contains(x)).ToList();
+
+        // Apply the filter (case-insensitive) to the candidate list.
+        return string.IsNullOrWhiteSpace(this.resourceAddFilter)
+            ? candidates
+            :
+            [
+                .. candidates.Where(x =>
+                    x.Name.ToString().Contains(this.resourceAddFilter, StringComparison.OrdinalIgnoreCase)
+                ),
+            ];
+    }
+
+
+    private static int TryParseInt(string input, int defaultValue)
+    {
+        var match = IntPrefixMatch().Match(input);
+
+        if (match.Success)
+        {
+            return int.Parse(match.Value);
+        }
+
+        return defaultValue;
+    }
+
+    [GeneratedRegex(@"\d{1,3}")]
+    private static partial Regex IntPrefixMatch();
+
+    [GeneratedRegex("([0-9]+)")]
+    private static partial Regex IsInteger();
+
+    // Wrapper to determine if a chunk is text or a number
+    public class ChunkWrapper(string value)
+    {
+        public string Value { get; } = value;
+        public bool IsNumber { get; } = int.TryParse(value, out _);
+    }
+
+    // Custom comparer to look at chunks sequentially 
+    public class ChunkComparer : IComparer<IEnumerable<ChunkWrapper>>
+    {
+        public int Compare(IEnumerable<ChunkWrapper>? x, IEnumerable<ChunkWrapper>? y)
+        {
+            if (x == null && y == null) return 0;
+            if (x == null) return -1;
+            if (y == null) return 1;
+
+            var enumX = x.GetEnumerator();
+            var enumY = y.GetEnumerator();
+
+            while (enumX.MoveNext() && enumY.MoveNext())
+            {
+                var chunkX = enumX.Current;
+                var chunkY = enumY.Current;
+
+                if (chunkX.IsNumber && chunkY.IsNumber)
+                {
+                    var numX = int.Parse(chunkX.Value);
+                    var numY = int.Parse(chunkY.Value);
+                    var cmp = numX.CompareTo(numY);
+                    if (cmp != 0) return cmp;
+                }
+                else
+                {
+                    var cmp = string.Compare(chunkX.Value, chunkY.Value, StringComparison.OrdinalIgnoreCase);
+                    if (cmp != 0) return cmp;
+                }
+            }
+            return 0;
+        }
     }
 }

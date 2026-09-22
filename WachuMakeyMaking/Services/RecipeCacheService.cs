@@ -336,6 +336,11 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
         var recipeLevelTable = Plugin.DataManager.GetExcelSheet<RecipeLevelTable>();
         var recipeLevel = recipeLevelTable.GetRow(recipe.RecipeLevelTable.RowId);
 
+
+        var noteBookDivisionId = recipe.RecipeNotebookList.RowId != 0 && recipe.RecipeNotebookList.IsValid
+            ? (recipe.RecipeNotebookList.RowId - 1000) / 8 + 1000
+            : ((uint)recipe.RecipeLevelTable.Value.ClassJobLevel - 1) / 5;
+
         // offset of 8 is because 0-7 are the base combat classes in the ClassJob sheet we use later, but craft type starts at 0 since it only contains crafting classes
         return new ModRecipe(
             recipe.RowId,
@@ -344,11 +349,12 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
             ingredientsDict,
             recipeLevel.ClassJobLevel,
             recipe.CraftType.RowId + 8,
-            recipe.SecretRecipeBook.RowId
+            recipe.SecretRecipeBook.RowId,
+            noteBookDivisionId
         );
     }
 
-    private bool CanCraftRecipe(ModRecipe recipe, Dictionary<uint, int> inventoryCounts)
+    private static bool CanCraftRecipe(ModRecipe recipe, Dictionary<uint, int> inventoryCounts)
     {
         // Check if we have enough of each ingredient
         foreach (var ingredient in recipe.Ingredients)
@@ -368,6 +374,11 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
             }
         }
 
+        return HasRequirementsForRecipe(recipe);
+    }
+
+    public static bool HasRequirementsForRecipe(ModRecipe recipe)
+    {
         var classJobSheet = Plugin.DataManager.GetExcelSheet<ClassJob>();
         var classJob = classJobSheet.GetRow(recipe.classJobId);
 

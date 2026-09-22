@@ -9,8 +9,8 @@ namespace WachuMakeyMaking.Models
         Dictionary<ModItem, byte> Ingredients,
         byte classJobLevel,
         uint classJobId,
-        uint book
-    ) { }
+        uint book,
+        uint noteBookDivisionId) { }
 
     public record ModRecipeWithValue(ModRecipe recipe, double Value, ModItem Currency)
         : ModRecipe(
@@ -20,6 +20,7 @@ namespace WachuMakeyMaking.Models
             recipe.Ingredients,
             recipe.classJobLevel,
             recipe.classJobId,
-            recipe.book
+            recipe.book,
+            recipe.noteBookDivisionId
         );
 }
