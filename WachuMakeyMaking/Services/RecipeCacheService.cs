@@ -423,21 +423,31 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
         return cachedRecipes;
     }
 
-    private Dictionary<uint, ModRecipe>? recipeCache;
+    private Dictionary<uint, ModRecipe>? recipeCacheByRecipeId;
+    private Dictionary<uint, ModRecipe[]>? recipeCacheByOutputItemId;
 
     public Dictionary<uint, ModRecipe> FindRecipes()
     {
-        recipeCache ??= Plugin
+        recipeCacheByRecipeId ??= Plugin
             .DataManager.GetExcelSheet<Recipe>()
             .Where(x => x.ItemResult.Value.Name != string.Empty)
             .Select(GetRecipeIngredients)
             .ToDictionary(x => x.RowId, x => x);
 
-        return recipeCache;
+        recipeCacheByOutputItemId ??= recipeCacheByRecipeId.Values
+            .GroupBy(x => x.Item.RowId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.ToArray()
+            );
+
+        return recipeCacheByRecipeId;
     }
 
     public ModRecipe? FindRecipeByResultItem(ModItem item)
     {
-        return FindRecipes().Values.FirstOrDefault(x => x.Item.RowId == item.RowId);
+        ModRecipe[]? recipes = null;
+        recipeCacheByOutputItemId?.TryGetValue(item.RowId, out recipes);
+        return recipes?.FirstOrDefault();
     }
 }

@@ -69,10 +69,10 @@ public sealed partial class MainWindow : Window, IDisposable
     private const float TAG_COL_WIDTH = 200f;
     private bool onlyEquippable = false;
     private bool onlyUnequippable = false;
+    private bool onlyCrafted = false;
+    private bool onlyRaw = false;
 
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     public MainWindow(RecipeCacheService recipeCacheService, SolverService solverService)
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
         : base($"{Plugin.Name}?##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
         this.SizeConstraints = new WindowSizeConstraints
@@ -92,7 +92,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         var recipes = this.recipeCacheService.FindRecipes().Values;
 
-        SetupDivisions(recipes);
+        this.divisionTags = SetupDivisions(recipes);
         this.ingredientDivisions = SetupIngredientDivisions(recipes);
         this.ingredientsUsable = SetupUsability(recipes);
         this.ingredientsEquippable = SetupEquippability(recipes);
@@ -159,7 +159,8 @@ public sealed partial class MainWindow : Window, IDisposable
         var ingredientsUsable = new HashSet<ModItem>();
         foreach (var recipe in recipes.Where(RecipeCacheService.HasRequirementsForRecipe))
         {
-            foreach (var ingredient in recipe.Ingredients.Keys){
+            foreach (var ingredient in recipe.Ingredients.Keys)
+            {
                 ingredientsUsable.Add(ingredient);
             }
         }
@@ -202,7 +203,7 @@ public sealed partial class MainWindow : Window, IDisposable
         return ingredientDivisions;
     }
 
-    private void SetupDivisions(IEnumerable<ModRecipe> recipes)
+    private Dictionary<string, Dictionary<ModNotebookDivision, bool>> SetupDivisions(IEnumerable<ModRecipe> recipes)
     {
         var divisionCategorySheet = Plugin.DataManager.GetExcelSheet<NotebookDivisionCategory>();
         var divisionSheet = Plugin.DataManager.GetExcelSheet<NotebookDivision>();
@@ -218,7 +219,7 @@ public sealed partial class MainWindow : Window, IDisposable
         var housingDivisions = divisionSheet.Where(x => x.NotebookDivisionCategory.RowId == 2)
             .Select(x => new ModNotebookDivision(x));
 
-        var divisionTags = new Dictionary<string, Dictionary<ModNotebookDivision, bool>>()
+        return new Dictionary<string, Dictionary<ModNotebookDivision, bool>>()
         {
             ["Standard"] = levellingDivisions.ToDictionary(x => x, x => true),
             [divisionCategorySheet.GetRow(1).Name.ToString()] = masterworkDivisions.ToDictionary(x => x, x => true),
@@ -228,8 +229,6 @@ public sealed partial class MainWindow : Window, IDisposable
                 [new ModNotebookDivision(null, "Other")] = true,
             },
         };
-
-        this.divisionTags = divisionTags;
     }
 
     public void Dispose()
@@ -482,31 +481,16 @@ public sealed partial class MainWindow : Window, IDisposable
                     if (categoryName == "Other")
                     {
                         baseX = ImGui.GetCursorPosX() + 25f;
-                        var divisionName = "Only Equippable";
-                        ImGui.SetCursorPosX(baseX + (manualInsertions % TAG_COLS) * TAG_COL_WIDTH);
-                        var isChecked = this.onlyEquippable;
-                        if (ImGui.Checkbox($"##_RUF_{categoryName}_{divisionName}", ref isChecked))
-                        {
-                            this.onlyEquippable = isChecked;
-                            this.onlyUnequippable = this.onlyUnequippable && !isChecked; // Ensure only one of the two can be true at a time
-                        }
-                        ImGui.SameLine();
-                        ImGui.Text(divisionName);
-                        manualInsertions++;
-                        ImGui.SameLine();
 
-                        divisionName = "Only Unequippable";
-                        ImGui.SetCursorPosX(baseX + (manualInsertions % TAG_COLS) * TAG_COL_WIDTH);
-                        isChecked = this.onlyUnequippable;
-                        if (ImGui.Checkbox($"##_RUF_{categoryName}_{divisionName}", ref isChecked))
-                        {
-                            this.onlyUnequippable = isChecked;
-                            this.onlyEquippable = this.onlyEquippable && !isChecked; // Ensure only one of the two can be true at a time
-                        }
-                        ImGui.SameLine();
-                        ImGui.Text(divisionName);
-                        manualInsertions++;
-                        ImGui.SameLine();
+                        // Add the two manual checkboxes for "Only Equippable" and "Only Unequippable"
+                        manualInsertions = DefineManualCheckbox(categoryName, baseX, manualInsertions, "Only Equippable", ref this.onlyEquippable, ref this.onlyUnequippable);
+
+                        manualInsertions = DefineManualCheckbox(categoryName, baseX, manualInsertions, "Only Unequippable", ref this.onlyUnequippable, ref this.onlyEquippable);
+
+                        // Add the two manual checkboxes for "Only Crafted" and "Only Raw"
+                        manualInsertions = DefineManualCheckbox(categoryName, baseX, manualInsertions, "Only Crafted", ref this.onlyCrafted, ref this.onlyRaw);
+
+                        manualInsertions = DefineManualCheckbox(categoryName, baseX, manualInsertions, "Only Raw", ref this.onlyRaw, ref this.onlyCrafted);
                     }
 
                     for (var i = manualInsertions; i < divisions.Count + manualInsertions; i++)
@@ -712,6 +696,25 @@ public sealed partial class MainWindow : Window, IDisposable
                 ImGui.EndTable();
             }
         }
+    }
+
+    private static int DefineManualCheckbox(string categoryName, float baseX, int manualInsertions, string divisionName, ref bool primaryFlag, ref bool secondaryFlag)
+    {
+        ImGui.SetCursorPosX(baseX + manualInsertions % TAG_COLS * TAG_COL_WIDTH);
+        var isChecked = primaryFlag;
+        if (ImGui.Checkbox($"##_RUF_{categoryName}_{divisionName}", ref isChecked))
+        {
+            primaryFlag = isChecked;
+            // If this flag was set true, ensure the opposite flag is cleared. If set false, leave the other flag as-is.
+            secondaryFlag = secondaryFlag && !isChecked;
+        }
+        ImGui.SameLine();
+        ImGui.Text(divisionName);
+        if ((manualInsertions + 1) % TAG_COLS != 0)
+        {
+            ImGui.SameLine();
+        }
+        return manualInsertions + 1;
     }
 
     private static void DrawIcon(uint itemId, double value = -1)
@@ -1235,6 +1238,17 @@ public sealed partial class MainWindow : Window, IDisposable
             {
                 return false;
             }
+
+            if (this.onlyCrafted && this.recipeCacheService.FindRecipeByResultItem(item) == null)
+            {
+                return false;
+            }
+
+            if (this.onlyRaw && this.recipeCacheService.FindRecipeByResultItem(item) != null)
+            {
+                return false;
+            }
+
 
             // Inclusive OR filters
 
