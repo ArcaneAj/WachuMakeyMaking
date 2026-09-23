@@ -62,9 +62,12 @@ public sealed partial class MainWindow : Window, IDisposable
     private Dictionary<string, Dictionary<ModNotebookDivision, bool>> divisionTags;
     private Dictionary<ModItem, HashSet<uint>> ingredientDivisions;
     private HashSet<ModItem> ingredientsUsable;
+    private HashSet<ModItem> ingredientsEquippable;
     private const int MAX_LEVEL = 100;
     private const int TAG_COLS = 4;
     private const float TAG_COL_WIDTH = 200f;
+    private bool onlyEquippable = false;
+    private bool onlyUnequippable = false;
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     public MainWindow(RecipeCacheService recipeCacheService, SolverService solverService)
@@ -90,16 +93,39 @@ public sealed partial class MainWindow : Window, IDisposable
 
         SetupDivisions(recipes);
         SetupUsability(recipes);
+        SetupEquippability(recipes);
 
         this.allIngredients = [.. recipes.SelectMany(x => x.Ingredients.Keys)];
 
         Plugin.Log.Warning($"Found {this.allIngredients.Count} distinct ingredients across all recipes");
     }
 
-    private void SetupUsability(Dictionary<uint, ModRecipe>.ValueCollection recipes)
+    private void SetupEquippability(IEnumerable<ModRecipe> recipes)
+    {
+        var ingredientsEquippable = new HashSet<ModItem>();
+        foreach (var recipe in recipes)
+        {
+            var item = recipe.Item;
+            var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
+            var itemRow = itemSheet.GetRow(item.RowId);
+            if (itemRow.FilterGroup > 4) // Not gear
+            {
+                continue;
+            }
+
+            foreach (var ingredient in recipe.Ingredients.Keys)
+            {
+                ingredientsEquippable.Add(ingredient);
+            }
+        }
+
+        this.ingredientsEquippable = ingredientsEquippable;
+    }
+
+    private void SetupUsability(IEnumerable<ModRecipe> recipes)
     {
         var ingredientsUsable = new HashSet<ModItem>();
-        foreach (var recipe in recipes.Where(x => RecipeCacheService.HasRequirementsForRecipe(x)))
+        foreach (var recipe in recipes.Where(RecipeCacheService.HasRequirementsForRecipe))
         {
             foreach (var ingredient in recipe.Ingredients.Keys){
                 ingredientsUsable.Add(ingredient);
@@ -109,7 +135,7 @@ public sealed partial class MainWindow : Window, IDisposable
         this.ingredientsUsable = ingredientsUsable;
     }
 
-    private void SetupDivisions(Dictionary<uint, ModRecipe>.ValueCollection recipes)
+    private void SetupDivisions(IEnumerable<ModRecipe> recipes)
     {
         var ingredientDivisions = new Dictionary<ModItem, HashSet<uint>>();
         foreach (var recipe in recipes)
@@ -401,16 +427,46 @@ public sealed partial class MainWindow : Window, IDisposable
                 if (ImGui.CollapsingHeader(categoryName))
                 {
                     var baseX = 0f;
-                    for (var i = 0; i < divisions.Count; i++)
+                    var manualInsertions = 0;
+                    if (categoryName == "Other")
                     {
-                        var j = i % TAG_COLS;
+                        baseX = ImGui.GetCursorPosX() + 25f;
+                        var divisionName = "Only Equippable";
+                        ImGui.SetCursorPosX(baseX + (manualInsertions % TAG_COLS) * TAG_COL_WIDTH);
+                        var isChecked = this.onlyEquippable;
+                        if (ImGui.Checkbox($"##_RUF_{categoryName}_{divisionName}", ref isChecked))
+                        {
+                            this.onlyEquippable = isChecked;
+                            this.onlyUnequippable = this.onlyUnequippable && !isChecked; // Ensure only one of the two can be true at a time
+                        }
+                        ImGui.SameLine();
+                        ImGui.Text(divisionName);
+                        manualInsertions++;
+                        ImGui.SameLine();
+
+                        divisionName = "Only Unequippable";
+                        ImGui.SetCursorPosX(baseX + (manualInsertions % TAG_COLS) * TAG_COL_WIDTH);
+                        isChecked = this.onlyUnequippable;
+                        if (ImGui.Checkbox($"##_RUF_{categoryName}_{divisionName}", ref isChecked))
+                        {
+                            this.onlyUnequippable = isChecked;
+                            this.onlyEquippable = this.onlyEquippable && !isChecked; // Ensure only one of the two can be true at a time
+                        }
+                        ImGui.SameLine();
+                        ImGui.Text(divisionName);
+                        manualInsertions++;
+                        ImGui.SameLine();
+                    }
+
+                    for (var i = manualInsertions; i < divisions.Count + manualInsertions; i++)
+                    {
                         if (i == 0)
                         {
                             baseX = ImGui.GetCursorPosX() + 25f;
                         }
 
-                        ImGui.SetCursorPosX(baseX + j * TAG_COL_WIDTH);
-                        var division = divisions.ElementAt(i);
+                        ImGui.SetCursorPosX(baseX + (i % TAG_COLS) * TAG_COL_WIDTH);
+                        var division = divisions.ElementAt(i - manualInsertions);
                         var divisionName = division.Key.Name.ToString();
                         var isChecked = division.Value;
                         if (ImGui.Checkbox($"##_RUF_{categoryName}_{divisionName}", ref isChecked))
@@ -1110,6 +1166,7 @@ public sealed partial class MainWindow : Window, IDisposable
         var presentItems = new HashSet<uint>(this.allDisplayResources?.Select(x => x.Id) ?? []);
         var candidates = this.allIngredients.Where(x => !presentItems.Contains(x.RowId)).OrderBy(x => x.Name).ToList();
 
+        var otherDivisionSelected = this.divisionTags["Other"].First(x => x.Key.Name == "Other").Value;
         // Otherwise, filter by selected divisions
         var selectedDivisions = this.divisionTags
             .SelectMany(category => category.Value.Where(tag => tag.Value).Select(tag => tag.Key))
@@ -1117,19 +1174,37 @@ public sealed partial class MainWindow : Window, IDisposable
             .ToHashSet();
         candidates = [.. candidates.Where(item =>
         {
+            // Manual exclusionary filters
+            if (this.onlyEquippable && !this.ingredientsEquippable.Contains(item))
+            {
+                return false;
+            }
+
+            if (this.onlyUnequippable && this.ingredientsEquippable.Contains(item))
+            {
+                return false;
+            }
+
+            // Inclusive OR filters
+
             // If the item has no divisions, it doesn't match any selected division.
             if (!this.ingredientDivisions.TryGetValue(item, out var divisions) || divisions.Count == 0)
             {
                 // If the user has selected the "Other" division, include items with no divisions.
-                return this.divisionTags["Other"].First().Value;
+                return otherDivisionSelected;
             }
 
             // If it has divisions, check if any of them match the selected divisions.
             var matches = selectedDivisions.Select(x => x.RowId).Intersect(divisions).Any();
 
+            if (matches)
+            {
+                return true;
+            }
+
             var allDivisionIds = this.divisionTags.SelectMany(category => category.Value.Select(tag => tag.Key.RowId)).ToHashSet();
             // If the user has selected the "Other" division, include items with divisions not in the possible division ids
-            return matches || (this.divisionTags["Other"].First().Value && !divisions.All(x => allDivisionIds.Contains(x)));
+            return otherDivisionSelected && !divisions.All(x => allDivisionIds.Contains(x));
         })];
 
         // Only include items that are usable based on the recipe requirements. e.g. it's used in at least 1 recipe we know how to craft.
