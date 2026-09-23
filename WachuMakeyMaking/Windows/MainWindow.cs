@@ -195,6 +195,18 @@ public sealed partial class MainWindow : Window, IDisposable
 
         var nestedIngredientsToCheck = ingredientDivisions.Keys.Select(this.recipeCacheService.FindRecipeByResultItem).OfType<ModRecipe>().ToList();
 
+        // Add the root items so that we can track end product divisions as well.
+        // We'll be reinserting the ingredients from the nested recipes, but as we're using a HashSet, duplicates will be ignored.
+        foreach (var recipe in recipes)
+        {
+            if (!ingredientDivisions.TryGetValue(recipe.Item, out var recipeDivisions))
+            {
+                recipeDivisions = [];
+                ingredientDivisions[recipe.Item] = recipeDivisions;
+            }
+
+            recipeDivisions.Add(recipe.noteBookDivisionId);
+        }
 
         if (nestedIngredientsToCheck.Count > 0)
         {
@@ -577,16 +589,7 @@ public sealed partial class MainWindow : Window, IDisposable
             ImGui.EndCombo();
         }
 
-        var craftableCandidates = filteredCandidates
-            .Where(x =>
-            {
-                var recipe = this.recipeCacheService.FindRecipeByResultItem(x);
-                if (recipe == null)
-                    return false;
-                // Filter out any candidates that have their entire ingredient list already added to the resource list
-                return !recipe.Ingredients.Keys.All(ingredient => this.allDisplayResources.Any(resource => resource.Item.RowId == ingredient.RowId));
-            })
-            .ToList();
+        var craftableCandidates = FilterCraftableCandidates();
 
         // Filter textbox for candidate list
         ImGui.Text("Add resources for recipe:");
@@ -1358,6 +1361,96 @@ public sealed partial class MainWindow : Window, IDisposable
             [
                 .. candidates.Where(x =>
                     x.Name.ToString().Contains(this.resourceAddFilter, StringComparison.OrdinalIgnoreCase)
+                ),
+            ];
+    }
+
+    private List<ModItem> FilterCraftableCandidates()
+    {
+        var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
+        var candidates = this.allIngredients.ToList();
+
+        var otherDivisionSelected = this.divisionTags["Other"].First(x => x.Key.Name == "Other").Value;
+        // Otherwise, filter by selected divisions
+        var selectedDivisions = this.divisionTags
+            .SelectMany(category => category.Value.Where(tag => tag.Value).Select(tag => tag.Key))
+            .Where(division => division.Division != null)
+            .ToHashSet();
+
+        candidates = [.. candidates.Where(item =>
+        {
+            // Manual exclusionary filters
+            var recipe = this.recipeCacheService.FindRecipeByResultItem(item);
+
+            // Only including things with recipes, so if there's no recipe, we can skip the rest of the checks.
+            if (recipe == null) {
+                return false;
+            }
+
+            if (!RecipeCacheService.HasRequirementsForRecipe(recipe))
+            {
+                return false;
+            }
+
+            var row = itemSheet.GetRow(recipe.Item.RowId);
+            if (this.onlyEquippable && row.FilterGroup > 4)
+            {
+                return false;
+            }
+
+            if (this.onlyUnequippable && row.FilterGroup <= 4)
+            {
+                return false;
+            }
+
+            if (this.onlyRaw)
+            {
+                return false;
+            }
+
+
+            // Inclusive OR filters
+
+            // If the item has no divisions, it doesn't match any selected division.
+            if (!this.ingredientDivisions.TryGetValue(item, out var divisions) || divisions.Count == 0)
+            {
+                // If the user has selected the "Other" division, include items with no divisions.
+                return otherDivisionSelected;
+            }
+
+            // If it has divisions, check if any of them match the selected divisions.
+            var matches = selectedDivisions.Select(x => x.RowId).Intersect(divisions).Any();
+
+            if (matches)
+            {
+                return true;
+            }
+
+            var allDivisionIds = this.divisionTags.SelectMany(category => category.Value.Select(tag => tag.Key.RowId)).ToHashSet();
+            // If the user has selected the "Other" division, include items with divisions not in the possible division ids
+            return otherDivisionSelected && !divisions.All(x => allDivisionIds.Contains(x));
+        })];
+
+        // Only include items that are usable based on the recipe requirements. e.g. it's used in at least 1 recipe we know how to craft.
+        candidates = candidates
+            .Where(x =>
+            {
+                var recipe = this.recipeCacheService.FindRecipeByResultItem(x);
+                if (recipe == null)
+                    return false;
+                // Filter out any candidates that have their entire ingredient list already added to the resource list
+                return !recipe.Ingredients.Keys.All(ingredient => this.allDisplayResources?.Any(resource => resource.Item.RowId == ingredient.RowId) ?? false);
+            })
+            .OrderBy(x => x.Name)
+            .ToList();
+
+        // Apply the filter (case-insensitive) to the candidate list.
+        return string.IsNullOrWhiteSpace(this.recipeResourceAddFilter)
+            ? candidates
+            :
+            [
+                .. candidates.Where(x =>
+                    x.Name.ToString().Contains(this.recipeResourceAddFilter, StringComparison.OrdinalIgnoreCase)
                 ),
             ];
     }
