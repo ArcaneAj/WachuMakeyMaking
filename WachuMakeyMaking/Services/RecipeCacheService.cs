@@ -446,8 +446,17 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
 
     public ModRecipe? FindRecipeByResultItem(ModItem item)
     {
-        ModRecipe[]? recipes = null;
-        recipeCacheByOutputItemId?.TryGetValue(item.RowId, out recipes);
+        recipeCacheByOutputItemId ??= Plugin
+            .DataManager.GetExcelSheet<Recipe>()
+            .Where(x => x.ItemResult.Value.Name != string.Empty)
+            .Select(GetRecipeIngredients)
+            .GroupBy(x => x.Item.RowId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.ToArray()
+            );
+
+        recipeCacheByOutputItemId.TryGetValue(item.RowId, out var recipes);
         return recipes?.FirstOrDefault();
     }
 }
