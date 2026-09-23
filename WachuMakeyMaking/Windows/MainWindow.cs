@@ -60,6 +60,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     // Filter text the user can type to narrow candidates
     private string resourceAddFilter = string.Empty;
+    private string recipeResourceAddFilter = string.Empty;
     private Dictionary<string, Dictionary<ModNotebookDivision, bool>> divisionTags;
     private Dictionary<ModItem, HashSet<uint>> ingredientDivisions;
     private HashSet<ModItem> ingredientsUsable;
@@ -433,7 +434,7 @@ public sealed partial class MainWindow : Window, IDisposable
         List<ModItem> filteredCandidates;
         ImGuiHelpers.ScaledDummy(5.0f);
 
-        if (ImGui.CollapsingHeader("Resource usage filters"))
+        if (ImGui.CollapsingHeader("Resource addition filters"))
         {
             foreach (var divisionCategory in this.divisionTags)
             {
@@ -521,11 +522,14 @@ public sealed partial class MainWindow : Window, IDisposable
 
         ImGuiHelpers.ScaledDummy(5.0f);
 
+        var filterOffsetX = 175f;
+
         filteredCandidates = FilterResourcesCandidates();
 
         // Filter textbox for candidate list
         ImGui.Text("Add resource:");
         ImGui.SameLine();
+        ImGui.SetCursorPosX(filterOffsetX);
         ImGui.SetNextItemWidth(250.0f);
         if (ImGui.InputText("##resource_filter", ref this.resourceAddFilter, 256)) { }
 
@@ -555,6 +559,77 @@ public sealed partial class MainWindow : Window, IDisposable
                     // Ensure selection and quantity state exists
                     this.resourceSelections[chosen.RowId] = true;
                     this.resourceQuantityOverrides[chosen.RowId] = 0;
+
+                    // Update inventory lookup and refresh cache using existing override logic
+                    this.inventoryDict = this.allDisplayResources.ToDictionary(x => x.Item, x => x);
+                    this.recipeCacheService.ForceRefresh(ApplyOverrides(this.allDisplayResources));
+
+                    // Reset filter and selected index so the combo shows the full list next time
+                    this.resourceAddFilter = string.Empty;
+
+                    // Close the combo popup after selection
+                    ImGui.CloseCurrentPopup();
+                }
+                if (i == 0)
+                    ImGui.SetItemDefaultFocus();
+            }
+
+            ImGui.EndCombo();
+        }
+
+        var craftableCandidates = filteredCandidates
+            .Where(x =>
+            {
+                var recipe = this.recipeCacheService.FindRecipeByResultItem(x);
+                if (recipe == null)
+                    return false;
+                // Filter out any candidates that have their entire ingredient list already added to the resource list
+                return !recipe.Ingredients.Keys.All(ingredient => this.allDisplayResources.Any(resource => resource.Item.RowId == ingredient.RowId));
+            })
+            .ToList();
+
+        // Filter textbox for candidate list
+        ImGui.Text("Add resources for recipe:");
+        ImGui.SameLine();
+        ImGui.SetCursorPosX(filterOffsetX);
+        ImGui.SetNextItemWidth(250.0f);
+        if (ImGui.InputText("##recipe_resource_filter", ref this.recipeResourceAddFilter, 256)) { }
+
+        // Current display name for combo (from filtered list)
+        currentName = craftableCandidates.Count > 0 ? craftableCandidates[0].Name : "Select...";
+
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(250.0f);
+
+        // Constrain the combo popup to max height 100px and a reasonable width.
+        // Call before BeginCombo so it applies to the combo popup window.
+        ImGui.SetNextWindowSizeConstraints(new Vector2(0, 0), new Vector2(250.0f, 300.0f));
+        if (ImGui.BeginCombo("##add_recipe_resource_combo", currentName, ImGuiComboFlags.None))
+        {
+            for (var i = 0; i < craftableCandidates.Count; i++)
+            {
+                var name = craftableCandidates[i].Name;
+                if (ImGui.Selectable(name, i == 0))
+                {
+                    var chosen = craftableCandidates[Math.Max(0, Math.Min(i, craftableCandidates.Count - 1))];
+                    var ingredients = this.recipeCacheService.FindRecipeByResultItem(chosen)?.Ingredients.Keys.Where(x => !this.allDisplayResources.Any(y => y.Item.RowId == x.RowId)).ToList();
+
+                    if (ingredients == null || ingredients.Count == 0)
+                    {
+                        ImGui.CloseCurrentPopup();
+                        continue;
+                    }
+
+                    // Default to quantity 0 (user can edit after adding)
+                    var list = new List<ModItemStack>(this.allDisplayResources ?? []).Concat(ingredients.Select(x => new ModItemStack(x, x.RowId, 0)));
+                    this.allDisplayResources = [.. list];
+
+                    foreach (var ingredient in ingredients)
+                    {
+                        // Ensure selection and quantity state exists for each ingredient
+                        this.resourceSelections[ingredient.RowId] = true;
+                        this.resourceQuantityOverrides[ingredient.RowId] = 0;
+                    }
 
                     // Update inventory lookup and refresh cache using existing override logic
                     this.inventoryDict = this.allDisplayResources.ToDictionary(x => x.Item, x => x);
