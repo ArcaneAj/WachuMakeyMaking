@@ -435,4 +435,9 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
 
         return recipeCache;
     }
+
+    public ModRecipe? FindRecipeByResultItem(ModItem item)
+    {
+        return FindRecipes().Values.FirstOrDefault(x => x.Item.RowId == item.RowId);
+    }
 }

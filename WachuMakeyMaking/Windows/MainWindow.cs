@@ -18,6 +18,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
+using WachuMakeyMaking.Utils;
 
 namespace WachuMakeyMaking.Windows;
 
@@ -92,37 +93,68 @@ public sealed partial class MainWindow : Window, IDisposable
         var recipes = this.recipeCacheService.FindRecipes().Values;
 
         SetupDivisions(recipes);
-        SetupUsability(recipes);
-        SetupEquippability(recipes);
+        this.ingredientDivisions = SetupIngredientDivisions(recipes);
+        this.ingredientsUsable = SetupUsability(recipes);
+        this.ingredientsEquippable = SetupEquippability(recipes);
 
         this.allIngredients = [.. recipes.SelectMany(x => x.Ingredients.Keys)];
-
-        Plugin.Log.Warning($"Found {this.allIngredients.Count} distinct ingredients across all recipes");
     }
 
-    private void SetupEquippability(IEnumerable<ModRecipe> recipes)
+    private HashSet<ModItem> SetupEquippability(IEnumerable<ModRecipe> recipes)
     {
         var ingredientsEquippable = new HashSet<ModItem>();
-        foreach (var recipe in recipes)
-        {
-            var item = recipe.Item;
-            var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
-            var itemRow = itemSheet.GetRow(item.RowId);
-            if (itemRow.FilterGroup > 4) // Not gear
-            {
-                continue;
-            }
+        var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
 
+        // Add ingredients from recipes whose result is gear
+        var gearRecipes = recipes.Where(r =>
+        {
+            var row = itemSheet.GetRow(r.Item.RowId);
+            return row.FilterGroup <= 4; // treat <=4 as gear
+        }).ToList();
+
+        foreach (var recipe in gearRecipes)
+        {
             foreach (var ingredient in recipe.Ingredients.Keys)
             {
                 ingredientsEquippable.Add(ingredient);
             }
         }
 
-        this.ingredientsEquippable = ingredientsEquippable;
+        // Recursively include ingredients of those ingredients regardless of their FilterGroup
+        var nestedIngredientsToCheck = ingredientsEquippable
+            .Select(this.recipeCacheService.FindRecipeByResultItem)
+            .OfType<ModRecipe>()
+            .ToList();
+
+        if (nestedIngredientsToCheck.Count > 0)
+        {
+            ingredientsEquippable.UnionWith(SetupEquippabilityRecursive(nestedIngredientsToCheck));
+        }
+
+        return ingredientsEquippable;
     }
 
-    private void SetupUsability(IEnumerable<ModRecipe> recipes)
+    private HashSet<ModItem> SetupEquippabilityRecursive(IEnumerable<ModRecipe> recipes)
+    {
+        var ingredients = new HashSet<ModItem>();
+        foreach (var recipe in recipes)
+        {
+            foreach (var ingredient in recipe.Ingredients.Keys)
+            {
+                ingredients.Add(ingredient);
+            }
+        }
+
+        var nested = ingredients.Select(this.recipeCacheService.FindRecipeByResultItem).OfType<ModRecipe>().ToList();
+        if (nested.Count > 0)
+        {
+            ingredients.UnionWith(SetupEquippabilityRecursive(nested));
+        }
+
+        return ingredients;
+    }
+
+    private HashSet<ModItem> SetupUsability(IEnumerable<ModRecipe> recipes)
     {
         var ingredientsUsable = new HashSet<ModItem>();
         foreach (var recipe in recipes.Where(RecipeCacheService.HasRequirementsForRecipe))
@@ -132,10 +164,17 @@ public sealed partial class MainWindow : Window, IDisposable
             }
         }
 
-        this.ingredientsUsable = ingredientsUsable;
+        var nestedIngredientsToCheck = ingredientsUsable.Select(this.recipeCacheService.FindRecipeByResultItem).OfType<ModRecipe>().ToList();
+
+        if (nestedIngredientsToCheck.Count > 0)
+        {
+            ingredientsUsable.UnionWith(SetupUsability(nestedIngredientsToCheck));
+        }
+
+        return ingredientsUsable;
     }
 
-    private void SetupDivisions(IEnumerable<ModRecipe> recipes)
+    private Dictionary<ModItem, HashSet<uint>> SetupIngredientDivisions(IEnumerable<ModRecipe> recipes)
     {
         var ingredientDivisions = new Dictionary<ModItem, HashSet<uint>>();
         foreach (var recipe in recipes)
@@ -152,7 +191,19 @@ public sealed partial class MainWindow : Window, IDisposable
             }
         }
 
-        this.ingredientDivisions = ingredientDivisions;
+        var nestedIngredientsToCheck = ingredientDivisions.Keys.Select(this.recipeCacheService.FindRecipeByResultItem).OfType<ModRecipe>().ToList();
+
+
+        if (nestedIngredientsToCheck.Count > 0)
+        {
+            ingredientDivisions.MergeUnion(SetupIngredientDivisions(nestedIngredientsToCheck));
+        }
+
+        return ingredientDivisions;
+    }
+
+    private void SetupDivisions(IEnumerable<ModRecipe> recipes)
+    {
         var divisionCategorySheet = Plugin.DataManager.GetExcelSheet<NotebookDivisionCategory>();
         var divisionSheet = Plugin.DataManager.GetExcelSheet<NotebookDivision>();
         var levellingDivisions = divisionSheet.Where(
