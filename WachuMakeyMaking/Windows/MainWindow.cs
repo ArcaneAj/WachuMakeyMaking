@@ -6,6 +6,7 @@ using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
+using FFXIVClientStructs.FFXIV.Application.Network.WorkDefinitions;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
@@ -72,6 +73,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool onlyUnequippable = false;
     private bool onlyCrafted = false;
     private bool onlyRaw = false;
+    private Dictionary<string, bool> itemSources;
 
     public MainWindow(RecipeCacheService recipeCacheService, SolverService solverService)
         : base($"{Plugin.Name}?##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
@@ -99,6 +101,8 @@ public sealed partial class MainWindow : Window, IDisposable
         this.ingredientsEquippable = SetupEquippability(recipes);
 
         this.allIngredients = [.. recipes.SelectMany(x => x.Ingredients.Keys)];
+
+        this.itemSources = this.recipeCacheService.GetPopulatedItemSources().ToDictionary(x => x, x => true);
     }
 
     private HashSet<ModItem> SetupEquippability(IEnumerable<ModRecipe> recipes)
@@ -277,7 +281,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private void ResetResourceOverrides()
     {
         Plugin.Log.Info("Inventory changed, resetting resource overrides");
-        var actualItems = this.recipeCacheService.GetConsolidatedItems();
+        var actualItems = this.recipeCacheService.GetConsolidatedItems(this.itemSources);
         this.allDisplayResources =
         [
             .. actualItems.Where(x => this.allIngredients.Contains(x.Item)),
@@ -298,7 +302,7 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
-        var actualItems = this.recipeCacheService.GetConsolidatedItems()
+        var actualItems = this.recipeCacheService.GetConsolidatedItems(this.itemSources)
             .Where(x => this.allIngredients.Contains(x.Item))
             .ToDictionary(x => x.Id, x => x);
 
@@ -443,6 +447,41 @@ public sealed partial class MainWindow : Window, IDisposable
 
         var selectedItems = this.allDisplayResources.Count(r => this.resourceSelections.GetValueOrDefault(r.Id, false));
         ImGui.Text($"{this.allDisplayResources.Length} resources found with recipes ({selectedItems} selected)");
+
+
+
+        ImGuiHelpers.ScaledDummy(5.0f);
+        if (ImGui.CollapsingHeader("Item source filters"))
+        {
+            var itemSourcesWithItems = this.recipeCacheService.GetPopulatedItemSources();
+
+            var baseX = 0f;
+            for (var i = 0; i < itemSourcesWithItems.Count; i++)
+            {
+                if (i == 0)
+                {
+                    baseX = ImGui.GetCursorPosX() + 25f;
+                }
+
+                ImGui.SetCursorPosX(baseX + (i % TAG_COLS) * TAG_COL_WIDTH);
+                var itemSource = itemSourcesWithItems[i];
+                var isChecked = this.itemSources.GetValueOrDefault(itemSource, true);
+                if (ImGui.Checkbox($"##_RUF_{itemSource}", ref isChecked))
+                {
+                    this.itemSources[itemSource] = isChecked;
+                    this.MergeInventoryChanges();
+                }
+                ImGui.SameLine();
+                ImGui.Text(itemSource);
+                if (i < itemSourcesWithItems.Count - 1 && (i + 1) % TAG_COLS != 0)
+                {
+                    ImGui.SameLine();
+                }
+            }
+        }
+
+
+
         List<ModItem> filteredCandidates;
         ImGuiHelpers.ScaledDummy(5.0f);
 

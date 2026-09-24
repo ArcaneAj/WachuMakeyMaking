@@ -1,5 +1,6 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Inventory;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using Lumina.Excel.Sheets;
 using System;
@@ -36,7 +37,9 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
     private ModItemStack[] items = [];
     private ModItemStack[] crystals = [];
 
-    private readonly Dictionary<ulong, List<ModItemStack>> inventoryCache = [];
+    private readonly Dictionary<string, List<ModItemStack>> retainerCache = [];
+
+    private Dictionary<string, List<ModItemStack>> itemsBySourceCache = [];
 
     public void ForceRefresh(ModItemStack[] modItemStacks)
     {
@@ -222,53 +225,16 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
         return [.. GetItemsFromInventory(GameInventoryType.Crystals)];
     }
 
-    public List<ModItemStack> GetConsolidatedItems()
+    public List<ModItemStack> GetConsolidatedItems(Dictionary<string, bool> itemSourceFilters)
     {
-        var allItems = GetCrystals();
+        Plugin.Log.Info($"GetConsolidatedItems called with filters: {string.Join(", ", itemSourceFilters.Select(kvp => $"{kvp.Key}: {kvp.Value}"))}");
 
-        var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
-
-        // Collect items from all inventory bags (excluding crystals)
-        allItems.AddRange(GetItemsFromInventory(GameInventoryType.Inventory1));
-        allItems.AddRange(GetItemsFromInventory(GameInventoryType.Inventory2));
-        allItems.AddRange(GetItemsFromInventory(GameInventoryType.Inventory3));
-        allItems.AddRange(GetItemsFromInventory(GameInventoryType.Inventory4));
-        allItems.AddRange(GetItemsFromInventory(GameInventoryType.SaddleBag1));
-        allItems.AddRange(GetItemsFromInventory(GameInventoryType.SaddleBag2));
-        allItems.AddRange(GetItemsFromInventory(GameInventoryType.PremiumSaddleBag1));
-        allItems.AddRange(GetItemsFromInventory(GameInventoryType.PremiumSaddleBag2));
-
-        // Try get retainer items if open
-        // Cache them between openings so we remember what was in them even if they get closed
-        ulong retainerId;
-        unsafe
-        {
-            var clientInterfaceUiModule = FFXIVClientStructs.FFXIV.Client.System.Framework.Framework.Instance()->UIModule->GetItemOrderModule();
-            var module = clientInterfaceUiModule;
-            retainerId = module != null ? module->ActiveRetainerId : 0;
-        }
-
-        if (retainerId != 0)
-        {
-            Plugin.Log.Info($"Active retainer ID: {retainerId}");
-            if (!this.inventoryCache.ContainsKey(retainerId))
-            {
-                var cachedItems = GetItemsFromInventory(GameInventoryType.RetainerCrystals);
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage1));
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage2));
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage3));
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage4));
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage5));
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage6));
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage7));
-                this.inventoryCache[retainerId] = cachedItems;
-            }
-        }
-
-        allItems.AddRange(this.inventoryCache.Values.SelectMany(x => x));
+        var itemBySource = GetItemsBySource();
 
         // Consolidate items with the same ID
-        var consolidatedItems = allItems
+        var consolidatedItems = itemBySource
+            .Where(x => itemSourceFilters.ContainsKey(x.Key) && itemSourceFilters[x.Key])
+            .SelectMany(x => x.Value)
             .GroupBy(stack => stack.Id)
             .Select(group =>
             {
@@ -279,6 +245,105 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
             .ToList();
 
         return consolidatedItems;
+    }
+
+    public List<string> GetPopulatedItemSources()
+    {
+        if (itemsBySourceCache.Count > 0)
+        {
+            return [.. itemsBySourceCache.Where(x => x.Value.Count > 0).Select(x => x.Key)];
+        }
+
+        var itemBySource = GetItemsBySource();
+        return [.. itemBySource.Where(x => x.Value.Count > 0).Select(x => x.Key)];
+    }
+
+    public Dictionary<string, List<ModItemStack>> GetItemsBySource()
+    {
+        var inventory = new List<ModItemStack>();
+        inventory.AddRange(GetCrystals());
+
+        var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
+
+        // Collect items from all inventory bags (excluding crystals)
+        inventory.AddRange(GetItemsFromInventory(GameInventoryType.Inventory1));
+        inventory.AddRange(GetItemsFromInventory(GameInventoryType.Inventory2));
+        inventory.AddRange(GetItemsFromInventory(GameInventoryType.Inventory3));
+        inventory.AddRange(GetItemsFromInventory(GameInventoryType.Inventory4));
+
+        var saddleBag = new List<ModItemStack>(); ;
+        saddleBag.AddRange(GetItemsFromInventory(GameInventoryType.SaddleBag1));
+        saddleBag.AddRange(GetItemsFromInventory(GameInventoryType.SaddleBag2));
+        saddleBag.AddRange(GetItemsFromInventory(GameInventoryType.PremiumSaddleBag1));
+        saddleBag.AddRange(GetItemsFromInventory(GameInventoryType.PremiumSaddleBag2));
+
+        var itemBySource = new Dictionary<string, List<ModItemStack>>
+        {
+            ["Inventory"] = inventory,
+            ["SaddleBag"] = saddleBag,
+        };
+
+        // Try get retainer items if open
+        // Cache them between openings so we remember what was in them even if they get closed
+        var retainerName = string.Empty;
+        unsafe
+        {
+            var retainerManager = RetainerManager.Instance();
+            if (retainerManager != null && retainerManager->IsReady)
+            {
+                // Access the retainer list span/array
+                var retainers = retainerManager->Retainers;
+
+                for (var i = 0; i < retainerManager->GetRetainerCount(); i++)
+                {
+                    var retainer = retainers[i];
+
+                    // Retainer information fields available on the struct:
+                    var retainerId = retainer.RetainerId;
+                    var name = retainer.NameString.ToString();
+                    //uint ventureId = retainer.VentureId;
+                    //uint ventureComplete = retainer.VentureComplete;
+                    //byte classJob = retainer.ClassJob;
+                    //byte level = retainer.Level;
+                    //uint gil = retainer.Gil;
+                    //byte marketItemCount = retainer.MarketItemCount;
+
+                    // Check if currently active/summoned
+                    if (retainer.RetainerId == retainerManager->GetActiveRetainer()->RetainerId)
+                    {
+                        retainerName = name;
+                    }
+                }
+            }
+        }
+
+
+        var retainerKey = $"{retainerName}";
+
+        if (!string.IsNullOrEmpty(retainerName))
+        {
+            if (true || !this.retainerCache.ContainsKey(retainerKey))
+            {
+                var cachedItems = GetItemsFromInventory(GameInventoryType.RetainerCrystals);
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage1));
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage2));
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage3));
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage4));
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage5));
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage6));
+                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage7));
+                this.retainerCache[retainerKey] = cachedItems;
+            }
+        }
+
+        foreach (var (k, v) in this.retainerCache)
+        {
+            itemBySource[k] = v;
+        }
+
+        this.itemsBySourceCache = itemBySource;
+
+        return itemBySource;
     }
 
     private static List<ModItemStack> GetItemsFromInventory(GameInventoryType inventory)
