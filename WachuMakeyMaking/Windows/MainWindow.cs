@@ -451,7 +451,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
 
         ImGuiHelpers.ScaledDummy(5.0f);
-        if (ImGui.CollapsingHeader("Item source filters"))
+        if (ImGui.CollapsingHeader("Item sources (inclusive)"))
         {
             var itemSourcesWithItems = this.recipeCacheService.GetPopulatedItemSources();
 
@@ -485,7 +485,7 @@ public sealed partial class MainWindow : Window, IDisposable
         List<ModItem> filteredCandidates;
         ImGuiHelpers.ScaledDummy(5.0f);
 
-        if (ImGui.CollapsingHeader("Resource addition filters"))
+        if (ImGui.CollapsingHeader("Resource addition categories (inclusive)"))
         {
             foreach (var divisionCategory in this.divisionTags)
             {
@@ -529,23 +529,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 if (ImGui.CollapsingHeader(categoryName))
                 {
                     var baseX = 0f;
-                    var manualInsertions = 0;
-                    if (categoryName == "Other")
-                    {
-                        baseX = ImGui.GetCursorPosX() + 25f;
-
-                        // Add the two manual checkboxes for "Only Equippable" and "Only Unequippable"
-                        manualInsertions = DefineManualCheckbox(categoryName, baseX, manualInsertions, "Only Equippable", ref this.onlyEquippable, ref this.onlyUnequippable);
-
-                        manualInsertions = DefineManualCheckbox(categoryName, baseX, manualInsertions, "Only Unequippable", ref this.onlyUnequippable, ref this.onlyEquippable);
-
-                        // Add the two manual checkboxes for "Only Crafted" and "Only Raw"
-                        manualInsertions = DefineManualCheckbox(categoryName, baseX, manualInsertions, "Only Crafted", ref this.onlyCrafted, ref this.onlyRaw);
-
-                        manualInsertions = DefineManualCheckbox(categoryName, baseX, manualInsertions, "Only Raw", ref this.onlyRaw, ref this.onlyCrafted);
-                    }
-
-                    for (var i = manualInsertions; i < divisions.Count + manualInsertions; i++)
+                    for (var i = 0; i < divisions.Count; i++)
                     {
                         if (i == 0)
                         {
@@ -553,7 +537,7 @@ public sealed partial class MainWindow : Window, IDisposable
                         }
 
                         ImGui.SetCursorPosX(baseX + (i % TAG_COLS) * TAG_COL_WIDTH);
-                        var division = divisions.ElementAt(i - manualInsertions);
+                        var division = divisions.ElementAt(i);
                         var divisionName = division.Key.Name.ToString();
                         var isChecked = division.Value;
                         if (ImGui.Checkbox($"##_RUF_{categoryName}_{divisionName}", ref isChecked))
@@ -569,6 +553,21 @@ public sealed partial class MainWindow : Window, IDisposable
                     }
                 }
             }
+        }
+
+        if (ImGui.CollapsingHeader("Resource addition filters (exclusive)"))
+        {
+            var baseX = 0f;
+            var manualInsertions = 0;
+            baseX = ImGui.GetCursorPosX() + 25f;
+
+            // Add the two manual checkboxes for "Only Equippable" and "Only Unequippable"
+            manualInsertions = DefineManualCheckbox("filters", baseX, manualInsertions, "Only Equippable", ref this.onlyEquippable, ref this.onlyUnequippable);
+            manualInsertions = DefineManualCheckbox("filters", baseX, manualInsertions, "Only Unequippable", ref this.onlyUnequippable, ref this.onlyEquippable);
+
+            // Add the two manual checkboxes for "Only Crafted" and "Only Raw"
+            manualInsertions = DefineManualCheckbox("filters", baseX, manualInsertions, "Only Crafted", ref this.onlyCrafted, ref this.onlyRaw);
+            manualInsertions = DefineManualCheckbox("filters", baseX, manualInsertions, "Only Raw", ref this.onlyRaw, ref this.onlyCrafted);
         }
 
         ImGuiHelpers.ScaledDummy(5.0f);
@@ -1385,8 +1384,11 @@ public sealed partial class MainWindow : Window, IDisposable
             }
 
             var allDivisionIds = this.divisionTags.SelectMany(category => category.Value.Select(tag => tag.Key.RowId)).ToHashSet();
-            // If the user has selected the "Other" division, include items with divisions not in the possible division ids
-            return otherDivisionSelected && !divisions.All(x => allDivisionIds.Contains(x));
+            // If the user has selected the "Other" division, include items only when ALL of their divisions are not in the
+            // known division ids. Previously we included items if any division was unknown which made "Other" overly inclusive
+            // (e.g. items with one known division and one unknown division would be included). Require all divisions to be
+            // unknown so that items that have at least one known division are still filtered by the selected categories.
+            return otherDivisionSelected && divisions.All(x => !allDivisionIds.Contains(x));
         })];
 
         // Only include items that are usable based on the recipe requirements. e.g. it's used in at least 1 recipe we know how to craft.
