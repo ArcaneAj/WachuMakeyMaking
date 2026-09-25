@@ -1334,7 +1334,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private List<ModItem> FilterResourcesCandidates()
     {
-        var presentItems = new HashSet<uint>(this.allDisplayResources?.Select(x => x.Id) ?? []);
+        var presentItems = new HashSet<uint>(this.allDisplayResources?.Select(x => x.Item.RowId) ?? []);
         var candidates = this.allIngredients.Where(x => !presentItems.Contains(x.RowId)).OrderBy(x => x.Name).ToList();
 
         var otherDivisionSelected = this.divisionTags["Other"].First(x => x.Key.Name == "Other").Value;
