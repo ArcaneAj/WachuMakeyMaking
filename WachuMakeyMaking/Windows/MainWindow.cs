@@ -6,7 +6,6 @@ using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
-using FFXIVClientStructs.FFXIV.Application.Network.WorkDefinitions;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
@@ -20,6 +19,7 @@ using System.Threading.Tasks;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
 using WachuMakeyMaking.Utils;
+using Action = System.Action;
 
 namespace WachuMakeyMaking.Windows;
 
@@ -87,6 +87,8 @@ public sealed partial class MainWindow : Window, IDisposable
         this.recipeCacheService = recipeCacheService;
         this.solverService = solverService;
 
+        this.itemSources = this.recipeCacheService.GetPopulatedItemSources().ToDictionary(x => x, x => true);
+
         // Register as a progress listener
         this.solverService.RegisterProgressListener(OnSolverProgressUpdate);
 
@@ -101,8 +103,6 @@ public sealed partial class MainWindow : Window, IDisposable
         this.ingredientsEquippable = SetupEquippability(recipes);
 
         this.allIngredients = [.. recipes.SelectMany(x => x.Ingredients.Keys)];
-
-        this.itemSources = this.recipeCacheService.GetPopulatedItemSources().ToDictionary(x => x, x => true);
     }
 
     private HashSet<ModItem> SetupEquippability(IEnumerable<ModRecipe> recipes)
@@ -801,6 +801,8 @@ public sealed partial class MainWindow : Window, IDisposable
                     // Resource column (icon + name)
                     ImGui.TableSetColumnIndex(2);
                     DrawIcon(resourceItem.Id);
+                    ImGui.SameLine();
+
                     var displayName = resourceItem.Item.Name;
                     if (this.inventoryDict.TryGetValue(resourceItem.Item, out var originalItemStack))
                     {
@@ -859,8 +861,6 @@ public sealed partial class MainWindow : Window, IDisposable
                     ImGui.EndTooltip();
                 }
             }
-
-            ImGui.SameLine();
         }
     }
 
@@ -1179,6 +1179,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
                         ImGui.SetCursorScreenPos(new Vector2(btnMin.X + padX, iconY));
                         DrawIcon(recipe.Item.RowId);
+                        ImGui.SameLine();
                         ImGui.Text($"{recipe.Item.Name}");
 
                         // Move cursor to the right edge of the invisible button so subsequent columns render correctly
@@ -1250,38 +1251,104 @@ public sealed partial class MainWindow : Window, IDisposable
                             ImGui.TableNextRow();
                             ImGui.TableSetColumnIndex(0);
 
-                            // Reserve full available width for the column before drawing
-                            var fullWidth = ImGui.GetContentRegionAvail().X;
-                            var iconHeight = 20.0f * ImGui.GetIO().FontGlobalScale;
-                            var rowHeight = Math.Max(ImGui.GetFrameHeightWithSpacing(), iconHeight);
+                            var recipe = this.solverRecipes[i];
 
-                            ImGui.InvisibleButton(
-                                $"cell_btn_result_{this.solverRecipes[i].RowId}",
-                                new Vector2(fullWidth, rowHeight)
-                            );
-                            if (ImGui.IsItemClicked())
+                            var id = $"result_{i}_{recipe.RowId}";
+
+                            ImGui.PushID(id);
+                            ImGui.AlignTextToFramePadding();
+                            var opened = ImGui.TreeNodeEx($"##{id}", ImGuiTreeNodeFlags.SpanAvailWidth | ImGuiTreeNodeFlags.AllowItemOverlap);
+                            // draw header visuals (icon + text) on same line
+                            ImGui.SameLine();
+                            DrawIcon(recipe.Item.RowId, recipe.Value);
+                            ImGui.SameLine();
+                            ImGui.TextUnformatted(recipe.Item.Name);
+                            if (opened)
                             {
-                                try
+                                ImGui.Indent();
+
+                                recipe.Ingredients.ToList().ForEach(ingredient =>
                                 {
-                                    OpenRecipeInCraftingLog(this.solverRecipes[i].RowId);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Plugin.Log.Error(
-                                        $"Failed to open crafting log for recipe {this.solverRecipes[i].RowId}: {ex.Message}"
-                                    );
-                                }
+                                    var ingredientQuantity = ingredient.Value * quantity;
+
+                                    DrawIcon(ingredient.Key.RowId, ingredientQuantity);
+                                    ImGui.SameLine();
+                                    ImGui.TextUnformatted(ingredient.Key.Name);
+                                    ImGui.SameLine();
+                                    var amountOwned = this.inventoryDict[ingredient.Key].Quantity;
+                                    var amountConfigured = GetResourceQuantity(this.inventoryDict[ingredient.Key]);
+                                    var differenceString = amountOwned == amountConfigured ? string.Empty : $"({amountConfigured})";
+                                    ImGui.TextUnformatted($"{amountOwned}{differenceString}/{ingredientQuantity}");
+                                });
+
+                                ImGui.Unindent();
+                                ImGui.TreePop();
                             }
+                            ImGui.PopID();
 
-                            var btnMin = ImGui.GetItemRectMin();
-                            var padX = 4.0f;
-                            var iconY = btnMin.Y + ((rowHeight - iconHeight) * 0.5f);
+                            //ImGui.PushID(id);
+                            //var open = GetOpenState(id);
+                            //// your map/state
+                            //// draw arrow (no visible label) so TreeNode behavior draws arrow
+                            //ImGui.TreeNodeEx("##arrow", ImGuiTreeNodeFlags.AllowItemOverlap);
+                            //// draw custom header content on the same line
+                            //ImGui.SameLine();
+                            //ImGui.BeginGroup();
+                            //DrawIcon(this.solverRecipes[i].Item.RowId, this.solverRecipes[i].Value);
+                            //ImGui.SameLine();
+                            //ImGui.AlignTextToFramePadding();
+                            //ImGui.TextUnformatted(this.solverRecipes[i].Item.Name);
+                            //ImGui.EndGroup();
+                            //// make whole header clickable
+                            //var rectMin = ImGui.GetItemRectMin();
+                            //var rectMax = ImGui.GetItemRectMax();
+                            //ImGui.SetCursorScreenPos(rectMin);
+                            //if (ImGui.InvisibleButton($"hdr_btn_{id}", rectMax - rectMin))
+                            //{
+                            //    open = !open;
+                            //    SetOpenState(id, open);
+                            //}
+                            //ImGui.SetCursorScreenPos(rectMax);
+                            //// render body if open
+                            //if (open)
+                            //{
+                            //    ImGui.Indent();
+                            //    ImGui.Text("Body content here");
+                            //    ImGui.Unindent();
+                            //    ImGui.TreePop();
+                            //}
+                            //ImGui.PopID();
 
-                            ImGui.SetCursorScreenPos(new Vector2(btnMin.X + padX, iconY));
-                            DrawIcon(this.solverRecipes[i].Item.RowId, this.solverRecipes[i].Value);
-                            ImGui.Text(this.solverRecipes[i].Item.Name);
+                            //if (ImGui.TreeNodeEx($"result_{i}_{this.solverRecipes[i].RowId}", ImGuiTreeNodeFlags.SpanFullWidth))
+                            //{
+                            //    ImGui.BeginGroup();
+                            //    DrawIcon(this.solverRecipes[i].Item.RowId, this.solverRecipes[i].Value);
+                            //    ImGui.SameLine();
+                            //    ImGui.AlignTextToFramePadding();
+                            //    ImGui.TextUnformatted(this.solverRecipes[i].Item.Name);
+                            //    ImGui.EndGroup();
+                            //    ImGui.TreePop();
+                            //}
 
-                            ImGui.SetCursorScreenPos(new Vector2(btnMin.X + fullWidth, btnMin.Y));
+                            //var rectMin = ImGui.GetItemRectMin();
+                            //var rectMax = ImGui.GetItemRectMax();
+                            //var size = rectMax - rectMin;
+                            //ImGui.SetCursorScreenPos(rectMin);
+                            //if (ImGui.InvisibleButton($"cell_btn_result_{this.solverRecipes[i].RowId}", size))
+                            //{
+                            //    try
+                            //    {
+                            //        OpenRecipeInCraftingLog(this.solverRecipes[i].RowId);
+                            //    }
+                            //    catch (Exception ex)
+                            //    {
+                            //        Plugin.Log.Error(
+                            //            $"Failed to open crafting log for recipe {this.solverRecipes[i].RowId}: {ex.Message}"
+                            //        );
+                            //    }
+                            //}
+
+                            //ImGui.SetCursorScreenPos(rectMax);
 
                             ImGui.TableSetColumnIndex(1);
                             ImGui.Text((this.solverRecipes[i].Number * quantity).ToString());
@@ -1300,6 +1367,21 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             ImGui.TextColored(new Vector4(1.0f, 0.0f, 0.0f, 1.0f), $"Error: {this.solverProgressMessage}");
         }
+    }
+
+    private readonly HashSet<string> openStates = [];
+
+    private void SetOpenState(string id, bool open)
+    {
+        if (open)
+            openStates.Add(id);
+        else
+            openStates.Remove(id);
+    }
+
+    private bool GetOpenState(string id)
+    {
+        return openStates.Contains(id);
     }
 
     private int GetResourceQuantity(ModItemStack resourceItem)

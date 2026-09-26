@@ -41,7 +41,7 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
 
     private Dictionary<string, List<ModItemStack>> itemsBySourceCache = [];
 
-    public void ForceRefresh(ModItemStack[] modItemStacks)
+public void ForceRefresh(ModItemStack[] modItemStacks)
     {
         var crystalIds = GetCrystals().Select(x => x.Id).ToArray();
         items = [.. modItemStacks.Where(x => !crystalIds.Contains(x.Id))];
@@ -251,11 +251,11 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
     {
         if (itemsBySourceCache.Count > 0)
         {
-            return [.. itemsBySourceCache.Where(x => x.Value.Count > 0).Select(x => x.Key)];
+            return [.. itemsBySourceCache.Where(x => x.Value.Count > 0).Select(x => x.Key).Union(["Inventory"])];
         }
 
         var itemBySource = GetItemsBySource();
-        return [.. itemBySource.Where(x => x.Value.Count > 0).Select(x => x.Key)];
+        return [.. itemBySource.Where(x => x.Value.Count > 0).Select(x => x.Key).Union(["Inventory"])];
     }
 
     public Dictionary<string, List<ModItemStack>> GetItemsBySource()
