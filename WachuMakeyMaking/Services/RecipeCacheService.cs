@@ -13,10 +13,11 @@ using WachuMakeyMaking.Utils;
 
 namespace WachuMakeyMaking.Services;
 
-public class RecipeCacheService(UniversalisService universalisService, CollectableService collectableService)
+public class RecipeCacheService(UniversalisService universalisService, CollectableService collectableService, InventoryService inventoryService)
 {
     private readonly UniversalisService universalisService = universalisService;
     private readonly CollectableService collectableService = collectableService;
+    private readonly InventoryService inventoryService = inventoryService;
 
     // Cache for recipes to avoid recalculating every frame
     private List<ModRecipeWithValue> cachedRecipes = [];
@@ -34,18 +35,16 @@ public class RecipeCacheService(UniversalisService universalisService, Collectab
     public string UniversalisMessage => this.universalisService.ErrorMessage;
 
     private CancellationTokenSource cancellationTokenSource = new();
-    private ModItemStack[] items = [];
-    private ModItemStack[] crystals = [];
+    //private ModItemStack[] items = [];
+    //private ModItemStack[] crystals = [];
 
-    private readonly Dictionary<string, List<ModItemStack>> retainerCache = [];
+    //private readonly Dictionary<string, List<ModItemStack>> retainerCache = [];
 
-    private Dictionary<string, List<ModItemStack>> itemsBySourceCache = [];
+    //private Dictionary<string, List<ModItemStack>> itemsBySourceCache = [];
 
 public void ForceRefresh(ModItemStack[] modItemStacks)
     {
-        var crystalIds = GetCrystals().Select(x => x.Id).ToArray();
-        items = [.. modItemStacks.Where(x => !crystalIds.Contains(x.Id))];
-        crystals = [.. modItemStacks.Where(x => crystalIds.Contains(x.Id))];
+        this.inventoryService.Reset();
         cachedRecipes.Clear();
         isCacheInitializing = false;
         CurrentProcessingStep = string.Empty;
@@ -76,6 +75,9 @@ public void ForceRefresh(ModItemStack[] modItemStacks)
 
             var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
             var gil = itemSheet.GetRow(1).ToMod();
+
+            var items = this.inventoryService.GetConsolidatedItems(new () { [ "Inventory" ] = true});
+            var crystals = this.inventoryService.GetCrystals();
 
             // Create inventory count lookup (items + crystals)
             var inventoryCounts = items.ToDictionary(stack => stack.Id, stack => stack.Quantity);
@@ -218,150 +220,6 @@ public void ForceRefresh(ModItemStack[] modItemStacks)
             return itemRow.Name.ToString();
         }
         return $"Unknown Item ({itemId})";
-    }
-
-    public static List<ModItemStack> GetCrystals()
-    {
-        return [.. GetItemsFromInventory(GameInventoryType.Crystals)];
-    }
-
-    public List<ModItemStack> GetConsolidatedItems(Dictionary<string, bool> itemSourceFilters)
-    {
-        Plugin.Log.Info($"GetConsolidatedItems called with filters: {string.Join(", ", itemSourceFilters.Select(kvp => $"{kvp.Key}: {kvp.Value}"))}");
-
-        var itemBySource = GetItemsBySource();
-
-        // Consolidate items with the same ID
-        var consolidatedItems = itemBySource
-            .Where(x => itemSourceFilters.ContainsKey(x.Key) && itemSourceFilters[x.Key])
-            .SelectMany(x => x.Value)
-            .GroupBy(stack => stack.Id)
-            .Select(group =>
-            {
-                var firstStack = group.First();
-                var totalQuantity = group.Sum(stack => stack.Quantity);
-                return new ModItemStack(firstStack.Item, firstStack.Id, totalQuantity);
-            })
-            .ToList();
-
-        return consolidatedItems;
-    }
-
-    public List<string> GetPopulatedItemSources()
-    {
-        if (itemsBySourceCache.Count > 0)
-        {
-            return [.. itemsBySourceCache.Where(x => x.Value.Count > 0).Select(x => x.Key).Union(["Inventory"])];
-        }
-
-        var itemBySource = GetItemsBySource();
-        return [.. itemBySource.Where(x => x.Value.Count > 0).Select(x => x.Key).Union(["Inventory"])];
-    }
-
-    public Dictionary<string, List<ModItemStack>> GetItemsBySource()
-    {
-        var inventory = new List<ModItemStack>();
-        inventory.AddRange(GetCrystals());
-
-        var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
-
-        // Collect items from all inventory bags (excluding crystals)
-        inventory.AddRange(GetItemsFromInventory(GameInventoryType.Inventory1));
-        inventory.AddRange(GetItemsFromInventory(GameInventoryType.Inventory2));
-        inventory.AddRange(GetItemsFromInventory(GameInventoryType.Inventory3));
-        inventory.AddRange(GetItemsFromInventory(GameInventoryType.Inventory4));
-
-        var saddleBag = new List<ModItemStack>(); ;
-        saddleBag.AddRange(GetItemsFromInventory(GameInventoryType.SaddleBag1));
-        saddleBag.AddRange(GetItemsFromInventory(GameInventoryType.SaddleBag2));
-        saddleBag.AddRange(GetItemsFromInventory(GameInventoryType.PremiumSaddleBag1));
-        saddleBag.AddRange(GetItemsFromInventory(GameInventoryType.PremiumSaddleBag2));
-
-        var itemBySource = new Dictionary<string, List<ModItemStack>>
-        {
-            ["Inventory"] = inventory,
-            ["SaddleBag"] = saddleBag,
-        };
-
-        // Try get retainer items if open
-        // Cache them between openings so we remember what was in them even if they get closed
-        var retainerName = string.Empty;
-        unsafe
-        {
-            var retainerManager = RetainerManager.Instance();
-            if (retainerManager != null && retainerManager->IsReady)
-            {
-                // Access the retainer list span/array
-                var retainers = retainerManager->Retainers;
-
-                for (var i = 0; i < retainerManager->GetRetainerCount(); i++)
-                {
-                    var retainer = retainers[i];
-
-                    // Retainer information fields available on the struct:
-                    var retainerId = retainer.RetainerId;
-                    var name = retainer.NameString.ToString();
-                    //uint ventureId = retainer.VentureId;
-                    //uint ventureComplete = retainer.VentureComplete;
-                    //byte classJob = retainer.ClassJob;
-                    //byte level = retainer.Level;
-                    //uint gil = retainer.Gil;
-                    //byte marketItemCount = retainer.MarketItemCount;
-
-                    // Check if currently active/summoned
-                    if (retainer.RetainerId == retainerManager->GetActiveRetainer()->RetainerId)
-                    {
-                        retainerName = name;
-                    }
-                }
-            }
-        }
-
-
-        var retainerKey = $"{retainerName}";
-
-        if (!string.IsNullOrEmpty(retainerName))
-        {
-            if (true || !this.retainerCache.ContainsKey(retainerKey))
-            {
-                var cachedItems = GetItemsFromInventory(GameInventoryType.RetainerCrystals);
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage1));
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage2));
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage3));
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage4));
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage5));
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage6));
-                cachedItems.AddRange(GetItemsFromInventory(GameInventoryType.RetainerPage7));
-                this.retainerCache[retainerKey] = cachedItems;
-            }
-        }
-
-        foreach (var (k, v) in this.retainerCache)
-        {
-            itemBySource[k] = v;
-        }
-
-        this.itemsBySourceCache = itemBySource;
-
-        return itemBySource;
-    }
-
-    private static List<ModItemStack> GetItemsFromInventory(GameInventoryType inventory)
-    {
-        var items = new List<ModItemStack>();
-        var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
-        var gameInventoryItems = Plugin.GameInventory.GetInventoryItems(inventory).ToArray().Where(x => x.ItemId != 0);
-        foreach (var item in gameInventoryItems)
-        {
-            if (!itemSheet.TryGetRow(item.BaseItemId, out var itemRow))
-            {
-                continue;
-            }
-
-            items.Add(new ModItemStack(itemRow.ToMod(), item.BaseItemId, item.Quantity));
-        }
-
-        return items;
     }
 
     private ModRecipe GetRecipeIngredients(Recipe recipe)

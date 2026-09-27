@@ -19,13 +19,13 @@ using System.Threading.Tasks;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
 using WachuMakeyMaking.Utils;
-using Action = System.Action;
 
 namespace WachuMakeyMaking.Windows;
 
 public sealed partial class MainWindow : Window, IDisposable
 {
     private readonly RecipeCacheService recipeCacheService;
+    private readonly InventoryService inventoryService;
     private readonly SolverService solverService;
 
     private static readonly bool CheckedDefault = false;
@@ -75,7 +75,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool onlyRaw = false;
     private Dictionary<string, bool> itemSources;
 
-    public MainWindow(RecipeCacheService recipeCacheService, SolverService solverService)
+    public MainWindow(RecipeCacheService recipeCacheService, SolverService solverService, InventoryService inventoryService)
         : base($"{Plugin.Name}?##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
         this.SizeConstraints = new WindowSizeConstraints
@@ -86,8 +86,9 @@ public sealed partial class MainWindow : Window, IDisposable
 
         this.recipeCacheService = recipeCacheService;
         this.solverService = solverService;
+        this.inventoryService = inventoryService;
 
-        this.itemSources = this.recipeCacheService.GetPopulatedItemSources().ToDictionary(x => x, x => true);
+        this.itemSources = this.inventoryService.GetPopulatedItemSources().ToDictionary(x => x, x => true);
 
         // Register as a progress listener
         this.solverService.RegisterProgressListener(OnSolverProgressUpdate);
@@ -281,7 +282,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private void ResetResourceOverrides()
     {
         Plugin.Log.Info("Inventory changed, resetting resource overrides");
-        var actualItems = this.recipeCacheService.GetConsolidatedItems(this.itemSources);
+        var actualItems = this.inventoryService.GetConsolidatedItems(this.itemSources);
         this.allDisplayResources =
         [
             .. actualItems.Where(x => this.allIngredients.Contains(x.Item)),
@@ -302,7 +303,7 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
-        var actualItems = this.recipeCacheService.GetConsolidatedItems(this.itemSources)
+        var actualItems = this.inventoryService.GetConsolidatedItems(this.itemSources)
             .Where(x => this.allIngredients.Contains(x.Item))
             .ToDictionary(x => x.Id, x => x);
 
@@ -453,7 +454,7 @@ public sealed partial class MainWindow : Window, IDisposable
         ImGuiHelpers.ScaledDummy(5.0f);
         if (ImGui.CollapsingHeader("Item sources (inclusive)"))
         {
-            var itemSourcesWithItems = this.recipeCacheService.GetPopulatedItemSources();
+            var itemSourcesWithItems = this.inventoryService.GetPopulatedItemSources();
 
             var baseX = 0f;
             for (var i = 0; i < itemSourcesWithItems.Count; i++)
@@ -1256,14 +1257,49 @@ public sealed partial class MainWindow : Window, IDisposable
                             var id = $"result_{i}_{recipe.RowId}";
 
                             ImGui.PushID(id);
-                            ImGui.AlignTextToFramePadding();
-                            var opened = ImGui.TreeNodeEx($"##{id}", ImGuiTreeNodeFlags.SpanAvailWidth | ImGuiTreeNodeFlags.AllowItemOverlap);
-                            // draw header visuals (icon + text) on same line
+                            // Use our own open-state map and an invisible button overlay so we can intercept clicks.
+                            var open = GetOpenState(id);
+                            // draw arrow so it looks like a tree node but don't push into the tree stack
+                            ImGui.TreeNodeEx("##arrow", ImGuiTreeNodeFlags.AllowItemOverlap | ImGuiTreeNodeFlags.NoTreePushOnOpen);
+                            // draw custom header content on the same line
                             ImGui.SameLine();
+                            ImGui.BeginGroup();
                             DrawIcon(recipe.Item.RowId, recipe.Value);
                             ImGui.SameLine();
+                            ImGui.AlignTextToFramePadding();
                             ImGui.TextUnformatted(recipe.Item.Name);
-                            if (opened)
+                            ImGui.EndGroup();
+
+                            // make whole header clickable and capture modifier keys
+                            var rectMin = ImGui.GetItemRectMin();
+                            var rectMax = ImGui.GetItemRectMax();
+                            ImGui.SetCursorScreenPos(rectMin);
+                            if (ImGui.InvisibleButton($"hdr_btn_{id}", rectMax - rectMin))
+                            {
+                                var io = ImGui.GetIO();
+                                if (io.KeyShift)
+                                {
+                                    try
+                                    {
+                                        OpenRecipeInCraftingLog(this.solverRecipes[i].RowId);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Plugin.Log.Error(
+                                            $"Failed to open crafting log for recipe {this.solverRecipes[i].RowId}: {ex.Message}"
+                                        );
+                                    }
+                                }
+                                else
+                                {
+                                    // Normal click toggles open state
+                                    open = !open;
+                                    SetOpenState(id, open);
+                                }
+                            }
+
+                            // render body if open
+                            if (open)
                             {
                                 ImGui.Indent();
 
@@ -1282,7 +1318,6 @@ public sealed partial class MainWindow : Window, IDisposable
                                 });
 
                                 ImGui.Unindent();
-                                ImGui.TreePop();
                             }
                             ImGui.PopID();
 

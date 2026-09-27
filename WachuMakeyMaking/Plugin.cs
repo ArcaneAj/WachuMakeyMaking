@@ -45,6 +45,7 @@ public sealed class Plugin : IDalamudPlugin
     private MainWindow MainWindow { get; init; }
     private UniversalisService UniversalisService { get; init; }
     private CollectableService CollectableService { get; init; }
+    public InventoryService InventoryService { get; init; }
     private SolverService SolverService { get; init; }
     private RecipeCacheService RecipeCacheService { get; init; }
 
@@ -52,9 +53,10 @@ public sealed class Plugin : IDalamudPlugin
     {
         UniversalisService = new UniversalisService();
         CollectableService = new CollectableService();
-        RecipeCacheService = new RecipeCacheService(UniversalisService, CollectableService);
+        InventoryService = new InventoryService();
+        RecipeCacheService = new RecipeCacheService(UniversalisService, CollectableService, InventoryService);
         SolverService = new SolverService(l => Log.Info(l), l => Log.Error(l));
-        MainWindow = new MainWindow(RecipeCacheService, SolverService);
+        MainWindow = new MainWindow(RecipeCacheService, SolverService, InventoryService);
 
         WindowSystem.AddWindow(MainWindow);
 
