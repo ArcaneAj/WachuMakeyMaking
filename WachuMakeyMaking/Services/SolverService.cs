@@ -15,14 +15,14 @@ namespace WachuMakeyMaking.Services
         private readonly List<Action<State, string, Solution?>> progressListeners = [];
         private State state = State.Idle;
         private Solution currentBest = null!;
-        private Dictionary<int, ModItem> variableIndexToItem = new();
+        private Dictionary<int, ModRecipe> variableIndexToRecipe = [];
         private double lowerBound = 0.0;
         private string progressMessage = string.Empty;
         private CancellationTokenSource cancellationTokenSource = new();
         private readonly HashSet<string> infeasibleBranchSignatures = new();
         // Last raw LP tuple result from RevisedSimplex for diagnostics (status, full x, optimalValue, basis)
-        private static (string status, double[] x, double optimalValue, int[] basis) lastLpTuple = ("", new double[0], 0.0, new int[0]);
-        private static string lastBasisDiagnostics = string.Empty;
+        private static (string status, double[] x, double optimalValue, int[] basis) LastLpTuple = ("", Array.Empty<double>(), 0.0, Array.Empty<int>());
+        private static string LastBasisDiagnostics = string.Empty;
 
         public Dictionary<ModItem, ModItemWithValue> ItemsWithValues { get; private set; } = [];
         public Dictionary<ModItem, ModItemWithValue> WiggledItemsWithValues { get; private set; } = [];
@@ -70,92 +70,22 @@ namespace WachuMakeyMaking.Services
             
             try
             {
-                // Build recipes list in the same ordering the tests expect: iterate the provided wiggled outputs in order,
-                // add their recipe variants.
                 var outputs = this.WiggledItemsWithValues.Values.ToList();
                 var recipes = new List<ModRecipeWithValue>();
 
-                var resources = this.recipeService.SelectedIngredients ?? new List<ModItemStack>();
-
-                // Add recipe variants for each wiggled output (preserve ordering).
-                // If an output has no service recipes but is a selected resource, add a synthetic self-recipe
-                // so the solver can choose to "sell" that item.
+                var resources = this.recipeService.SelectedIngredients ?? [];
                 foreach (var output in outputs)
                 {
-                    var serviceRecipes = this.recipeService.GetRecipesByOutput(output.Item) ?? new List<ModRecipe>();
+                    var serviceRecipes = this.recipeService.GetRecipesByOutput(output.Item) ?? [];
                     var value = output.Value;
                     var currency = output.Currency;
 
-                    // Helper: determine if an item exists in selected resources
-                    static bool IsInResources(ModItem item, IEnumerable<ModItemStack> resources)
-                        => resources.Any(r => r.Item.Equals(item));
-
-                    // If there are service recipes, flatten any intermediate ingredients that are not in resources
-                    // by replacing them with their own recipe ingredients. This produces one or more expanded
-                    // recipe variants which are added to the solver. If no service recipes exist, add a
-                    // synthetic self-recipe so the solver can choose to "sell" that item.
                     if (serviceRecipes.Count > 0)
                     {
                         foreach (var r in serviceRecipes)
                         {
-                            // We'll produce a set of expanded recipes starting from r. Use a queue to
-                            // iteratively replace any ingredient that itself can be produced by service recipes
-                            // and is NOT present in the selected resources list.
-                            var queue = new Queue<ModRecipe>();
-                            queue.Enqueue(r);
-
-                            while (queue.Count > 0)
-                            {
-                                var current = queue.Dequeue();
-
-                                // Find first ingredient that is not available as a resource but has its own recipes
-                                var missingIntermediate = current.Ingredients.Keys
-                                    .FirstOrDefault(ing => !IsInResources(ing, resources) && (this.recipeService.GetRecipesByOutput(ing) ?? new List<ModRecipe>()).Count > 0);
-
-                                if (missingIntermediate == null)
-                                {
-                                    // No further expansion possible, add this variant
-                                    recipes.Add(new ModRecipeWithValue(current, value, currency));
-                                    continue;
-                                }
-
-                                // Need to expand this missing intermediate using each of its service recipes
-                                var neededQty = current.Ingredients.GetValueOrDefault(missingIntermediate);
-                                var childRecipes = this.recipeService.GetRecipesByOutput(missingIntermediate) ?? new List<ModRecipe>();
-
-                                foreach (var child in childRecipes)
-                                {
-                                    // Build new ingredients dictionary: start from current and remove the intermediate
-                                    var newIngredients = new Dictionary<ModItem, int>();
-                                    foreach (var kv in current.Ingredients)
-                                    {
-                                        if (!kv.Key.Equals(missingIntermediate))
-                                        {
-                                            newIngredients[kv.Key] = newIngredients.GetValueOrDefault(kv.Key) + kv.Value;
-                                        }
-                                    }
-
-                                    // Add child's ingredients multiplied by neededQty
-                                    foreach (var ck in child.Ingredients)
-                                    {
-                                        var addQty = ck.Value * neededQty;
-                                        newIngredients[ck.Key] = newIngredients.GetValueOrDefault(ck.Key) + addQty;
-                                    }
-
-                                    // Convert ints back to byte quantities (clamp to byte.MaxValue)
-                                    var finalIngredients = new Dictionary<ModItem, byte>();
-                                    foreach (var kv in newIngredients)
-                                    {
-                                        var qty = kv.Value;
-                                        if (qty < 0) qty = 0;
-                                        if (qty > byte.MaxValue) qty = byte.MaxValue;
-                                        finalIngredients[kv.Key] = (byte)qty;
-                                    }
-
-                                    var expanded = new ModRecipe(current.RowId, current.Item, current.Number, finalIngredients, current.classJobLevel, current.classJobId, current.book, current.noteBookDivisionId);
-                                    queue.Enqueue(expanded);
-                                }
-                            }
+                            var flattenedRecipes = GetFlattenedRecipes(r);
+                            recipes.AddRange(flattenedRecipes.Select(fr => new ModRecipeWithValue(fr, value, currency)));
                         }
                     }
                     else
@@ -169,11 +99,11 @@ namespace WachuMakeyMaking.Services
                     }
                 }
 
-                // Build variable index -> item mapping (one variable per recipe variant in recipes list).
-                this.variableIndexToItem = new Dictionary<int, ModItem>();
+                // Track recipe indices so we can reconstruct solution output later
+                this.variableIndexToRecipe = [];
                 for (var i = 0; i < recipes.Count; i++)
                 {
-                    this.variableIndexToItem[i] = recipes[i].Item;
+                    this.variableIndexToRecipe[i] = recipes[i];
                 }
 
                 if (recipes.Count == 0)
@@ -189,6 +119,7 @@ namespace WachuMakeyMaking.Services
                 UpdateProgress(State.FindingInitialSolution, "Finding initial solution...");
 
                 var usedResources = resources.Where(x => recipes.Any(y => y.Ingredients.ContainsKey(x.Item)));
+                var resourcesWeDontHave = recipes.SelectMany(x => x.Ingredients.Keys).Where(x => !resources.Any(r => r.Item.RowId == x.RowId)).Distinct();
 
                 var costs = recipes.Select(x => -x.Value * x.Number).ToArray();
 
@@ -199,6 +130,13 @@ namespace WachuMakeyMaking.Services
                 {
                     constraintsList.Add(resource.Quantity);
                     var row = recipes.Select(recipe => (int)recipe.Ingredients.GetValueOrDefault(resource.Item));
+                    assignmentsList.Add([.. row]);
+                }
+
+                foreach (var resource in resourcesWeDontHave)
+                {
+                    constraintsList.Add(0);
+                    var row = recipes.Select(recipe => (int)recipe.Ingredients.GetValueOrDefault(resource));
                     assignmentsList.Add([.. row]);
                 }
 
@@ -245,6 +183,104 @@ namespace WachuMakeyMaking.Services
             return this.currentBest;
         }
 
+        public List<ModRecipe> GetFlattenedRecipes(ModRecipe recipe)
+        {
+            var combinations = GetRecipeCombinations(recipe);
+
+            return [.. combinations.Select(dict =>
+            {
+                var ingredients = dict.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => (byte)Math.Min(byte.MaxValue, kvp.Value)
+                );
+
+                // Construct the new recipe variant with the flattened ingredients
+                // Adjust parameters to match your ModRecipe constructor definition
+                return recipe with { Ingredients = ingredients }; //new ModRecipe(recipe.RowId, recipe.Item, recipe.Number, ingredients, recipe.classJobLevel, recipe.classJobId, recipe.book, recipe.noteBookDivisionId);
+            })];
+        }
+
+        private List<Dictionary<ModItem, byte>> GetRecipeCombinations(ModRecipe recipe)
+        {
+            var allIngredientOptions = new List<List<Dictionary<ModItem, byte>>>();
+
+            // Collect all branching options for each ingredient in this recipe
+            foreach (var (ingredient, amountRequired) in recipe.Ingredients)
+            {
+                var optionsForThisIngredient = GetIngredientOptions(ingredient, amountRequired);
+                allIngredientOptions.Add(optionsForThisIngredient);
+            }
+
+            // Combine options across all ingredients via Cartesian Product
+            return CartesianProduct(allIngredientOptions);
+        }
+
+        private List<Dictionary<ModItem, byte>> GetIngredientOptions(ModItem item, byte amountRequired)
+        {
+            var options = new List<Dictionary<ModItem, byte>>
+            {
+                // Option 1: Keep the ingredient as-is
+                new() { [item] = amountRequired }
+            };
+
+            // Option 2: Expand via sub-recipes
+            var serviceRecipes = this.recipeService.GetRecipesByOutput(item) ?? [];
+            foreach (var subRecipe in serviceRecipes)
+            {
+                // Calculate crafting cycles required based on the sub-recipe's yield (Number).
+                // e.g., requiring 3 ingots from a recipe with yield 2 requires ceil(3/2) = 2 crafts.
+                var craftsNeeded = subRecipe.Number > 0
+                    ? (int)Math.Ceiling((double)amountRequired / subRecipe.Number)
+                    : amountRequired;
+
+                // Recursive expansion (no cycle protection needed)
+                var subCombinations = GetRecipeCombinations(subRecipe);
+
+                foreach (var subCombo in subCombinations)
+                {
+                    var scaledCombo = new Dictionary<ModItem, byte>();
+                    foreach (var (subItem, subAmount) in subCombo)
+                    {
+                        scaledCombo[subItem] = (byte)(subAmount * craftsNeeded);
+                    }
+
+                    options.Add(scaledCombo);
+                }
+            }
+
+            return options;
+        }
+
+        private static List<Dictionary<ModItem, byte>> CartesianProduct(
+            List<List<Dictionary<ModItem, byte>>> optionsPerIngredient)
+        {
+            var result = new List<Dictionary<ModItem, byte>> { new() };
+
+            foreach (var ingredientOptions in optionsPerIngredient)
+            {
+                var nextResult = new List<Dictionary<ModItem, byte>>();
+
+                foreach (var currentDict in result)
+                {
+                    foreach (var optionDict in ingredientOptions)
+                    {
+                        var combined = new Dictionary<ModItem, byte>(currentDict);
+
+                        foreach (var (item, count) in optionDict)
+                        {
+                            combined[item] = (byte)(combined.GetValueOrDefault(item, (byte)0) + count);
+                        }
+
+                        nextResult.Add(combined);
+                    }
+                }
+
+                result = nextResult;
+            }
+
+            return result;
+        }
+
         private bool BranchAndBound(Problem problem, ContinuousSolution previousResult, CancellationToken cancellationToken)
         {
             var valuesToBranch = previousResult
@@ -257,15 +293,15 @@ namespace WachuMakeyMaking.Services
             {
                 if (previousResult.OptimalValue < (this.currentBest?.OptimalValue ?? 0.0))
                 {
-                    // Convert continuous integral result to discrete Solution mapping variables to ModItemStacks
-                    var stacks = new List<ModItemStack>();
+                    // Convert continuous integral result to discrete Solution mapping variables to ModRecipeStacks
+                    var stacks = new List<ModRecipeStack>();
                     for (var i = 0; i < previousResult.Values.Count; i++)
                     {
                         var qty = (int)Math.Round(previousResult.Values[i]);
-                        var item = this.variableIndexToItem.GetValueOrDefault(i);
-                        if (item != null)
+                        var recipe = this.variableIndexToRecipe.GetValueOrDefault(i);
+                        if (recipe != null)
                         {
-                            stacks.Add(new ModItemStack(item, item.RowId, qty));
+                            stacks.Add(new ModRecipeStack(recipe, recipe.RowId, qty));
                         }
                     }
                     this.currentBest = new Solution(stacks, previousResult.OptimalValue, State.Optimal, previousResult.Branches);
@@ -369,8 +405,8 @@ namespace WachuMakeyMaking.Services
                                 this.log($"[Verify] Var values (sample first 20): {string.Join(",", sol.Values.Take(Math.Min(20, sol.Values.Count)).Select(v => v.ToString()))}");
                                 try
                                 {
-                                    var basis = lastLpTuple.basis;
-                                    var rawX = lastLpTuple.x;
+                                    var basis = LastLpTuple.basis;
+                                    var rawX = LastLpTuple.x;
                                     if (basis != null && basis.Length > 0)
                                     {
                                         this.log($"[Verify] LP basis (sample first 40): {string.Join(",", basis.Take(Math.Min(40, basis.Length)))}");
@@ -392,7 +428,12 @@ namespace WachuMakeyMaking.Services
                         this.logError($"[Verify] Failed to verify branch rows: {ex.Message}");
                     }
                 }
-                VerifyBranchRows(positiveBranches, positiveResult, "positive");
+
+                if (FeatureFlags.VerifyBranchRows)
+                {
+                    VerifyBranchRows(positiveBranches, positiveResult, "positive");
+                }
+
                 if (positiveResult.OptimalValue < this.lowerBound)
                 {
                     this.logError("Branch result was below the lower bound, something very wrong must have happened.");
@@ -491,8 +532,8 @@ namespace WachuMakeyMaking.Services
                                 this.log($"[Verify] Var values (sample first 20): {string.Join(",", sol.Values.Take(Math.Min(20, sol.Values.Count)).Select(v => v.ToString()))}");
                                 try
                                 {
-                                    var basis = lastLpTuple.basis;
-                                    var rawX = lastLpTuple.x;
+                                    var basis = LastLpTuple.basis;
+                                    var rawX = LastLpTuple.x;
                                     if (basis != null && basis.Length > 0)
                                     {
                                         this.log($"[Verify] LP basis (sample first 40): {string.Join(",", basis.Take(Math.Min(40, basis.Length)))}");
@@ -514,7 +555,12 @@ namespace WachuMakeyMaking.Services
                         this.logError($"[Verify] Failed to verify branch rows: {ex.Message}");
                     }
                 }
-                VerifyBranchRowsNeg(negativeBranches, negativeResult, "negative");
+
+                if (FeatureFlags.VerifyBranchRows)
+                {
+                    VerifyBranchRowsNeg(negativeBranches, negativeResult, "negative");
+                }
+
                 if (negativeResult.State == State.Optimal)
                 {
                     // Verify the solution satisfies the branch constraint
@@ -680,7 +726,7 @@ namespace WachuMakeyMaking.Services
                         var maxResidual = residual.Max(r => Math.Abs(r));
                         if (maxResidual > tol)
                         {
-                            lastBasisDiagnostics = $"Pre-basis check failed: maxResidual={maxResidual}; sample residuals={string.Join(",", residual.Take(Math.Min(10, residual.Length)))}; basisSample={string.Join(",", basis.Take(Math.Min(40,basis.Length)))}";
+                            LastBasisDiagnostics = $"Pre-basis check failed: maxResidual={maxResidual}; sample residuals={string.Join(",", residual.Take(Math.Min(10, residual.Length)))}; basisSample={string.Join(",", basis.Take(Math.Min(40,basis.Length)))}";
                             // Return error with zero-filled values to preserve expected variable count
                             return new ContinuousSolution(Enumerable.Repeat(0.0, n).ToList(), 0, State.Error, branches);
                         }
@@ -788,7 +834,7 @@ namespace WachuMakeyMaking.Services
                         var maxResidual = residual.Max(r => Math.Abs(r));
                     if (maxResidual > tol)
                     {
-                        lastBasisDiagnostics = $"Pre-basis check (phaseI) failed: maxResidual={maxResidual}; sample residuals={string.Join(",", residual.Take(Math.Min(10, residual.Length)))}; basisSample={string.Join(",", basisPhase2.Take(Math.Min(40,basisPhase2.Length)))}";
+                        LastBasisDiagnostics = $"Pre-basis check (phaseI) failed: maxResidual={maxResidual}; sample residuals={string.Join(",", residual.Take(Math.Min(10, residual.Length)))}; basisSample={string.Join(",", basisPhase2.Take(Math.Min(40,basisPhase2.Length)))}";
                         return new ContinuousSolution(Enumerable.Repeat(0.0, n).ToList(), 0, State.Error, branches);
                     }
                     }
@@ -803,7 +849,7 @@ namespace WachuMakeyMaking.Services
                 // Save raw LP tuple for diagnostics (status, full x vector, optimalValue, basis)
                 // Store before we convert to ContinuousSolution so BranchAndBound diagnostics
                 // can inspect the actual LP basis/x that the revised simplex produced.
-                lastLpTuple = tupleResultFinal;
+                LastLpTuple = tupleResultFinal;
 
                 // Post-check: verify returned x satisfies Ax <= b for the augmented A and fullConstraintsCopy
                 try
@@ -833,8 +879,8 @@ namespace WachuMakeyMaking.Services
                         {
                             var status = tupleResultFinal.status;
                             var diag = $"LP post-check failed: status={status} optimalValue={tupleResultFinal.optimalValue} xLen={tupleResultFinal.x.Length} basisLen={(tupleResultFinal.basis==null?0:tupleResultFinal.basis.Length)}";
-                            if (!string.IsNullOrEmpty(lastBasisDiagnostics)) diag += " | lastBasisDiagnostics=" + lastBasisDiagnostics;
-                            lastBasisDiagnostics = diag;
+                            if (!string.IsNullOrEmpty(LastBasisDiagnostics)) diag += " | lastBasisDiagnostics=" + LastBasisDiagnostics;
+                            LastBasisDiagnostics = diag;
                         }
                         catch { }
                     }
@@ -1144,7 +1190,7 @@ namespace WachuMakeyMaking.Services
     }
 
     // Public discrete solution mapping variables back to actual items with quantities
-    public record Solution(List<ModItemStack> Values, double OptimalValue, SolverService.State State, Stack<Branch> Branches)
+    public record Solution(List<ModRecipeStack> Values, double OptimalValue, SolverService.State State, Stack<Branch> Branches)
     {
         public virtual bool Equals(Solution? other)
         {
@@ -1171,7 +1217,7 @@ namespace WachuMakeyMaking.Services
             for (var i = 0; i < Values.Count; i++)
             {
                 var v = Values[i];
-                log($"  Craft [{v.Quantity}]: {v.Item.Name}");
+                log($"  Craft [{v.Quantity}]: {v.Recipe.Item.Name}");
             }
 
             log($"Total value: {Math.Floor(OptimalValue)} gil");

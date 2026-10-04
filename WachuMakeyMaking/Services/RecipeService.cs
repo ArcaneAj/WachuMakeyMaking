@@ -114,11 +114,6 @@ namespace WachuMakeyMaking.Services
                     itemSet.UnionWith(recipeItems);
                 }
 
-
-                foreach (var recipe in pricesByItemId)
-                {
-                    Plugin.Log.Info($"Found recipe: {recipe.Value.Item.Name} ({recipe.Value.Item.RowId})");
-                }
                 this.SelectedIngredients = selectedIngredients;
                 this.PricesByItemId = pricesByItemId;
                 this.CraftCostByItemId = pricesByItemId.ToDictionary(

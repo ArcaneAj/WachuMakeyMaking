@@ -80,24 +80,24 @@ namespace WachuMakeyMaking.Tabs
                         ImGui.TableSetupColumn("Contribution", ImGuiTableColumnFlags.WidthFixed, 100.0f);
                         ImGui.TableHeadersRow();
 
-                        foreach (var stack in this.model.CurrentSolution.Values)
+                        foreach (var (stack, index) in this.model.CurrentSolution.Values.Select((x,i) => (x,i)))
                         {
                             var quantity = stack.Quantity;
                             if (quantity > 0)
                             {
-                                var item = stack.Item;
+                                var recipe = stack.Recipe;
+                                var item = recipe.Item;
                                 var itemWithValue = solverInputs.FirstOrDefault(s => s.Item.RowId == item.RowId);
                                 var value = itemWithValue?.Value ?? this.recipeService.PricesByItemId.GetValueOrDefault(item.RowId)?.Value ?? 0.0;
                                 ImGui.TableNextRow();
                                 ImGui.TableSetColumnIndex(0);
 
-                                var recipe = this.recipeService.GetRecipesByOutput(item).FirstOrDefault();
                                 var hasRecipe = recipe != null;
                                 if (recipe == null)
                                 {
                                     recipe = new ModRecipe(0, item, 1, new Dictionary<ModItem, byte> { [item] = 1 }, 0, 0, 0, 0);
                                 }
-                                var id = $"result_{item.RowId}";
+                                var id = $"result_{index}_{item.RowId}";
 
                                 ImGui.PushID(id);
                                 // Use our own open-state map and an invisible button overlay so we can intercept clicks.
@@ -123,7 +123,14 @@ namespace WachuMakeyMaking.Tabs
                                 UiUtils.DrawIcon(item.RowId, value);
                                 ImGui.SameLine();
                                 ImGui.AlignTextToFramePadding();
-                                ImGui.TextUnformatted(item.Name);
+                                var countToDisplay = recipe.Number > 1 ? $" x{recipe.Number}" : string.Empty;
+                                ImGui.TextUnformatted($"{item.Name}{countToDisplay}");
+                                if (ImGui.IsItemHovered())
+                                {
+                                    ImGui.BeginTooltip();
+                                    ImGui.Text($"Shift + click to open recipe");
+                                    ImGui.EndTooltip();
+                                }
                                 ImGui.EndGroup();
 
                                 // make whole header clickable and capture modifier keys
@@ -165,18 +172,21 @@ namespace WachuMakeyMaking.Tabs
                                 {
                                     ImGui.Indent();
 
-                                    recipe.Ingredients.ToList().ForEach(ingredient =>
+                                    recipe.Ingredients.ToList().ForEach(ingredientWithCount =>
                                     {
-                                        var ingredientQuantity = ingredient.Value * quantity;
+                                        var ingredient = ingredientWithCount.Key;
+                                        var count = ingredientWithCount.Value;
+                                        var requiredQuantity = count * quantity;
 
-                                        UiUtils.DrawIcon(ingredient.Key.RowId, ingredientQuantity);
+                                        UiUtils.DrawIcon(ingredient.RowId);
                                         ImGui.SameLine();
-                                        ImGui.TextUnformatted(ingredient.Key.Name);
+                                        var countToDisplay = count > 1 ? $" x{count}" : string.Empty;
+                                        ImGui.TextUnformatted($"{ingredient.Name}{countToDisplay}");
                                         ImGui.SameLine();
-                                        var amountOwned = ownedItemsDict.GetValueOrDefault(ingredient.Key, new ModItemStack(ingredient.Key, 0, 0)).Quantity;
-                                        var amountConfigured = configuredItemsDict.GetValueOrDefault(ingredient.Key, new ModItemStack(ingredient.Key, 0, 0)).Quantity;
+                                        var amountOwned = ownedItemsDict.GetValueOrDefault(ingredient, new ModItemStack(ingredient, 0, 0)).Quantity;
+                                        var amountConfigured = configuredItemsDict.GetValueOrDefault(ingredient, new ModItemStack(ingredient, 0, 0)).Quantity;
                                         var differenceString = amountOwned == amountConfigured ? string.Empty : $"({amountConfigured})";
-                                        ImGui.TextUnformatted($"{amountOwned}{differenceString}/{ingredientQuantity}");
+                                        ImGui.TextUnformatted($"{amountOwned}{differenceString}/{requiredQuantity}");
                                     });
 
                                     ImGui.Unindent();

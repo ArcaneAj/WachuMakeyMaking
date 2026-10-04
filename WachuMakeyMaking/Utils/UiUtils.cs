@@ -77,10 +77,38 @@ namespace WachuMakeyMaking.Utils
             var recipe = recipeSheet.GetRow(recipeId);
             var matchingGearSets = EnumerateGearSets().Where(x => x.JobId == recipe.CraftType.RowId);
             if (!matchingGearSets.Any()) throw new Exception($"No gearset found for job {recipe.CraftType.RowId}");
+
+            var recipeNotebookListSheet = Plugin.DataManager.GetExcelSheet<RecipeNotebookList>();
+            var recipeNotebookList = recipeNotebookListSheet.FirstOrDefault(list =>
+                list.Recipe.Any(r => r.RowId == recipeId));
+
+            var indexInPage = -1;
+            foreach (var (r, index) in recipeNotebookList.Recipe.Select((x,i) => (x,i)))
+            {
+                Plugin.Log.Info($"Recipe {r.RowId} at index {index} in category {recipeNotebookList.RowId}");
+                if (r.RowId == recipe.RowId || r.RowId == 4294967295)
+                {
+                    indexInPage = index;
+                    break;
+                }
+            }
+
+            var noteBookDivisionId = recipe.RecipeNotebookList.RowId != 0 && recipe.RecipeNotebookList.IsValid
+                ? (recipe.RecipeNotebookList.RowId - 1000) / 8 + 1000
+                : ((uint)recipe.RecipeLevelTable.Value.ClassJobLevel - 1) / 5;
+
+            var categoryPage = noteBookDivisionId < 1000 ? 0 : recipeNotebookList.RowOffset / 8;
+
             unsafe
             {
+                if (AgentRecipeNote.Instance()->SelectedRecipeIndex == indexInPage)
+                    if(AgentRecipeNote.Instance()->SelectedRecipeCategory == noteBookDivisionId)
+                        if (AgentRecipeNote.Instance()->SelectedRecipeCategoryPage == categoryPage)
+                            if (AgentRecipeNote.Instance()->SelectedCraftType == recipe.CraftType.RowId)
+                                return; // Already open to the right recipe, no need to do anything)
+
                 RaptureGearsetModule.Instance()->EquipGearset(matchingGearSets.First().GearSetId);
-                AgentRecipeNote.Instance()->OpenRecipeByRecipeId(recipe.RowId);
+                AgentRecipeNote.Instance()->OpenRecipeByRecipeId(recipeId);
             }
 
         }
