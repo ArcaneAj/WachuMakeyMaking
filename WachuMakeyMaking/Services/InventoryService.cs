@@ -5,36 +5,60 @@ using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Xml.Linq;
+using System.Threading;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Utils;
 
 namespace WachuMakeyMaking.Services
 {
-    public class InventoryService
+    public class InventoryService : BaseService
     {
+        private const int CHECK_PERIOD_SECONDS = 1;
         private readonly ExcelSheet<Item> itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
         private ModItemStack[] inventory = [];
-        private ModItemStack[] crystals = [];
         private ModItemStack[] saddleBag = [];
         private Dictionary<string, ModItemStack[]> retainerCache = [];
-
+        private List<ModItemStack> manualIngredients = [];
+        private Dictionary<uint, int> manualQuantities = [];
         private Dictionary<string, ModItemStack[]> itemsBySourceCache = [];
+        public Dictionary<string, bool> ItemSources { get; private set; } = [];
+        private Timer? retainerTimer;
 
         public void Clear()
         {
             this.inventory = [];
-            this.crystals = [];
             this.saddleBag = [];
             this.retainerCache = [];
             this.itemsBySourceCache = [];
+            this.retainerTimer?.Dispose();
+            this.retainerTimer = null;
+        }
+
+        public void ResetManualOverrides()
+        {
+            this.manualIngredients = [];
+            this.manualQuantities = [];
         }
 
         public void Init()
         {
             this.inventory = GetInventory();
-            this.crystals = GetCrystals();
             this.saddleBag = GetSaddleBag();
+            this.retainerTimer?.Dispose();
+            this.retainerTimer = new Timer(_ =>
+            {
+                try
+                {
+                    CheckActiveRetainer();
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Log.Error($"CheckActiveRetainer timer error: {ex}");
+                }
+            }, null, 0, TimeSpan.FromSeconds(CHECK_PERIOD_SECONDS).Milliseconds);
+
+            this.ItemSources = this.GetPopulatedItemSources().ToDictionary(x => x, x => true);
+            this.EmitInitCompleteEvent();
         }
 
         public void Reset()
@@ -94,8 +118,8 @@ namespace WachuMakeyMaking.Services
 
         private ModItemStack[] GetInventory()
         {
-            // Collect items from all inventory bags (excluding crystals)
             return [
+                ..GetItemsFromInventory(GameInventoryType.Crystals),
                 ..GetItemsFromInventory(GameInventoryType.Inventory1),
                 ..GetItemsFromInventory(GameInventoryType.Inventory2),
                 ..GetItemsFromInventory(GameInventoryType.Inventory3),
@@ -108,26 +132,33 @@ namespace WachuMakeyMaking.Services
             return [.. GetItemsFromInventory(GameInventoryType.Crystals)];
         }
 
-        public ModItemStack[] GetConsolidatedItems(Dictionary<string, bool> itemSourceFilters)
+        public ModItemStack[] GetOwnedItems()
         {
-            Plugin.Log.Info($"GetConsolidatedItems called with filters: {string.Join(", ", itemSourceFilters.Select(kvp => $"{kvp.Key}: {kvp.Value}"))}");
+            var itemSourceFilters = this.ItemSources;
+            //Plugin.Log.Info($"GetOwnedItems called with filters: {string.Join(", ", itemSourceFilters.Select(kvp => $"{kvp.Key}: {kvp.Value}"))}");
 
-            var itemBySource = GetItemsBySource();
+            var itemsBySource = GetItemsBySource();
 
             // Consolidate items with the same ID
-            var consolidatedItems = itemBySource
+            var consolidatedItems = itemsBySource
                 .Where(x => itemSourceFilters.ContainsKey(x.Key) && itemSourceFilters[x.Key])
                 .SelectMany(x => x.Value)
                 .GroupBy(stack => stack.Id)
                 .Select(group =>
                 {
                     var firstStack = group.First();
-                    var totalQuantity = group.Sum(stack => stack.Quantity);
-                    return new ModItemStack(firstStack.Item, firstStack.Id, totalQuantity);
+                    return new ModItemStack(firstStack.Item, firstStack.Id, group.Sum(stack => stack.Quantity));
                 })
                 .ToArray();
 
+
             return consolidatedItems;
+        }
+
+        public ModItemStack[] GetOverriddenItems()
+        {
+            var manualItems = GetOwnedItems().Concat(this.manualIngredients).Select(x => new ModItemStack(x.Item, x.Id, this.manualQuantities.GetValueOrDefault(x.Id, x.Quantity)));
+            return [.. manualItems];
         }
 
         public List<string> GetPopulatedItemSources()
@@ -165,6 +196,16 @@ namespace WachuMakeyMaking.Services
                 .Where(x => x.ItemId != 0)
                 .SelectMany(i => this.itemSheet.TryGetRow(i.BaseItemId, out var row) ? [new ModItemStack(row.ToMod(), i.BaseItemId, i.Quantity)] : Array.Empty<ModItemStack>())
                 .ToArray();
+        }
+
+        public void AddManualIngredient(ModItemStack modItemStack)
+        {
+            this.manualIngredients.Add(modItemStack);
+        }
+
+        internal void SetItemQuantity(uint itemId, int quantity)
+        {
+            this.manualQuantities[itemId] = quantity;
         }
     }
 }

@@ -1,0 +1,937 @@
+[
+  {
+    "Index": 0,
+    "Output": {
+      "Id": 52633,
+      "Name": "Arm of Unmaking"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 153997,
+    "Ingredients": [
+      {
+        "Id": 52633,
+        "Name": "Arm of Unmaking",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 1,
+    "Output": {
+      "Id": 5383,
+      "Name": "Ash Log"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 133,
+    "Ingredients": [
+      {
+        "Id": 5383,
+        "Name": "Ash Log",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 2,
+    "Output": {
+      "Id": 5364,
+      "Name": "Ash Lumber"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 496,
+    "Ingredients": [
+      {
+        "Id": 5364,
+        "Name": "Ash Lumber",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 3,
+    "Output": {
+      "Id": 8146,
+      "Name": "Battlecraft Demimateria II"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 297,
+    "Ingredients": [
+      {
+        "Id": 8146,
+        "Name": "Battlecraft Demimateria II",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 4,
+    "Output": {
+      "Id": 8147,
+      "Name": "Battlecraft Demimateria III"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 500,
+    "Ingredients": [
+      {
+        "Id": 8147,
+        "Name": "Battlecraft Demimateria III",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 5,
+    "Output": {
+      "Id": 44012,
+      "Name": "Black Star"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 749,
+    "Ingredients": [
+      {
+        "Id": 44012,
+        "Name": "Black Star",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 6,
+    "Output": {
+      "Id": 19123,
+      "Name": "Blade of Revelry"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 8998,
+    "Ingredients": [
+      {
+        "Id": 19123,
+        "Name": "Blade of Revelry",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 7,
+    "Output": {
+      "Id": 14181,
+      "Name": "Blank Grade 1 Orchestrion Roll"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 400,
+    "Ingredients": [
+      {
+        "Id": 14181,
+        "Name": "Blank Grade 1 Orchestrion Roll",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 8,
+    "Output": {
+      "Id": 14182,
+      "Name": "Blank Grade 2 Orchestrion Roll"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 4000,
+    "Ingredients": [
+      {
+        "Id": 14182,
+        "Name": "Blank Grade 2 Orchestrion Roll",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 9,
+    "Output": {
+      "Id": 14183,
+      "Name": "Blank Grade 3 Orchestrion Roll"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 4949,
+    "Ingredients": [
+      {
+        "Id": 14183,
+        "Name": "Blank Grade 3 Orchestrion Roll",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 10,
+    "Output": {
+      "Id": 5512,
+      "Name": "Clear Glass Lens"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 130,
+    "Ingredients": [
+      {
+        "Id": 5512,
+        "Name": "Clear Glass Lens",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 11,
+    "Output": {
+      "Id": 19846,
+      "Name": "Cottonseed Oil"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 198,
+    "Ingredients": [
+      {
+        "Id": 19846,
+        "Name": "Cottonseed Oil",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 12,
+    "Output": {
+      "Id": 35792,
+      "Name": "Crystal of Divine Light"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 699999,
+    "Ingredients": [
+      {
+        "Id": 35792,
+        "Name": "Crystal of Divine Light",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 13,
+    "Output": {
+      "Id": 35791,
+      "Name": "Crystal of Eternal Darkness"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 6000,
+    "Ingredients": [
+      {
+        "Id": 35791,
+        "Name": "Crystal of Eternal Darkness",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 14,
+    "Output": {
+      "Id": 33819,
+      "Name": "Diamond Plating"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 20000,
+    "Ingredients": [
+      {
+        "Id": 33819,
+        "Name": "Diamond Plating",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 15,
+    "Output": {
+      "Id": 49214,
+      "Name": "Double Duraluminum Ingot"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 20000,
+    "Ingredients": [
+      {
+        "Id": 49214,
+        "Name": "Double Duraluminum Ingot",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 16,
+    "Output": {
+      "Id": 17,
+      "Name": "Earth Cluster"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 60,
+    "Ingredients": [
+      {
+        "Id": 17,
+        "Name": "Earth Cluster",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 17,
+    "Output": {
+      "Id": 11,
+      "Name": "Earth Crystal"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 44,
+    "Ingredients": [
+      {
+        "Id": 11,
+        "Name": "Earth Crystal",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 18,
+    "Output": {
+      "Id": 5,
+      "Name": "Earth Shard"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 8,
+    "Ingredients": [
+      {
+        "Id": 5,
+        "Name": "Earth Shard",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 19,
+    "Output": {
+      "Id": 36238,
+      "Name": "Enchanted Manganese Ink"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 6490,
+    "Ingredients": [
+      {
+        "Id": 36238,
+        "Name": "Enchanted Manganese Ink",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 20,
+    "Output": {
+      "Id": 49225,
+      "Name": "Everkeep Resin"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 6554,
+    "Ingredients": [
+      {
+        "Id": 49225,
+        "Name": "Everkeep Resin",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 21,
+    "Output": {
+      "Id": 8149,
+      "Name": "Fieldcraft Demimateria II"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 3209,
+    "Ingredients": [
+      {
+        "Id": 8149,
+        "Name": "Fieldcraft Demimateria II",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 22,
+    "Output": {
+      "Id": 8150,
+      "Name": "Fieldcraft Demimateria III"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 1400,
+    "Ingredients": [
+      {
+        "Id": 8150,
+        "Name": "Fieldcraft Demimateria III",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 23,
+    "Output": {
+      "Id": 14,
+      "Name": "Fire Cluster"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 40,
+    "Ingredients": [
+      {
+        "Id": 14,
+        "Name": "Fire Cluster",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 24,
+    "Output": {
+      "Id": 8,
+      "Name": "Fire Crystal"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 39,
+    "Ingredients": [
+      {
+        "Id": 8,
+        "Name": "Fire Crystal",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 25,
+    "Output": {
+      "Id": 2,
+      "Name": "Fire Shard"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 40,
+    "Ingredients": [
+      {
+        "Id": 2,
+        "Name": "Fire Shard",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 26,
+    "Output": {
+      "Id": 27838,
+      "Name": "Frantoio Oil"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 1000,
+    "Ingredients": [
+      {
+        "Id": 27838,
+        "Name": "Frantoio Oil",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 27,
+    "Output": {
+      "Id": 44057,
+      "Name": "Gargantua Hide"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 149,
+    "Ingredients": [
+      {
+        "Id": 44057,
+        "Name": "Gargantua Hide",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 28,
+    "Output": {
+      "Id": 46188,
+      "Name": "Goldentail"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 4485,
+    "Ingredients": [
+      {
+        "Id": 46188,
+        "Name": "Goldentail",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 29,
+    "Output": {
+      "Id": 4868,
+      "Name": "Gysahl Greens"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 167,
+    "Ingredients": [
+      {
+        "Id": 4868,
+        "Name": "Gysahl Greens",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 30,
+    "Output": {
+      "Id": 15,
+      "Name": "Ice Cluster"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 40,
+    "Ingredients": [
+      {
+        "Id": 15,
+        "Name": "Ice Cluster",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 31,
+    "Output": {
+      "Id": 9,
+      "Name": "Ice Crystal"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 41,
+    "Ingredients": [
+      {
+        "Id": 9,
+        "Name": "Ice Crystal",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 32,
+    "Output": {
+      "Id": 3,
+      "Name": "Ice Shard"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 40,
+    "Ingredients": [
+      {
+        "Id": 3,
+        "Name": "Ice Shard",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 33,
+    "Output": {
+      "Id": 27952,
+      "Name": "Immaculate Wingblade"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 3000,
+    "Ingredients": [
+      {
+        "Id": 27952,
+        "Name": "Immaculate Wingblade",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 34,
+    "Output": {
+      "Id": 5057,
+      "Name": "Iron Ingot"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 2,
+    "Ingredients": [
+      {
+        "Id": 5057,
+        "Name": "Iron Ingot",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 35,
+    "Output": {
+      "Id": 4702,
+      "Name": "Knight\u0027s Bread"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 304,
+    "Ingredients": [
+      {
+        "Id": 4702,
+        "Name": "Knight\u0027s Bread",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 36,
+    "Output": {
+      "Id": 27835,
+      "Name": "Lemonette"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 719,
+    "Ingredients": [
+      {
+        "Id": 27835,
+        "Name": "Lemonette",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 37,
+    "Output": {
+      "Id": 18,
+      "Name": "Lightning Cluster"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 95,
+    "Ingredients": [
+      {
+        "Id": 18,
+        "Name": "Lightning Cluster",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 38,
+    "Output": {
+      "Id": 12,
+      "Name": "Lightning Crystal"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 48,
+    "Ingredients": [
+      {
+        "Id": 12,
+        "Name": "Lightning Crystal",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 39,
+    "Output": {
+      "Id": 6,
+      "Name": "Lightning Shard"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 45,
+    "Ingredients": [
+      {
+        "Id": 6,
+        "Name": "Lightning Shard",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 40,
+    "Output": {
+      "Id": 36255,
+      "Name": "Ovibos Milk"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 398,
+    "Ingredients": [
+      {
+        "Id": 36255,
+        "Name": "Ovibos Milk",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 41,
+    "Output": {
+      "Id": 39583,
+      "Name": "Pearl of Flames"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 89997,
+    "Ingredients": [
+      {
+        "Id": 39583,
+        "Name": "Pearl of Flames",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 42,
+    "Output": {
+      "Id": 38675,
+      "Name": "Pearl of Winds"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 235048,
+    "Ingredients": [
+      {
+        "Id": 38675,
+        "Name": "Pearl of Winds",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 43,
+    "Output": {
+      "Id": 44001,
+      "Name": "Ra\u0027Kaznar Ingot"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 2500,
+    "Ingredients": [
+      {
+        "Id": 44001,
+        "Name": "Ra\u0027Kaznar Ingot",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 44,
+    "Output": {
+      "Id": 4757,
+      "Name": "Rolanberry Cheese"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 180,
+    "Ingredients": [
+      {
+        "Id": 4757,
+        "Name": "Rolanberry Cheese",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 45,
+    "Output": {
+      "Id": 49209,
+      "Name": "Rose Garnet Ore"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 1230,
+    "Ingredients": [
+      {
+        "Id": 49209,
+        "Name": "Rose Garnet Ore",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 46,
+    "Output": {
+      "Id": 12894,
+      "Name": "Sour Cream"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 250,
+    "Ingredients": [
+      {
+        "Id": 12894,
+        "Name": "Sour Cream",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 47,
+    "Output": {
+      "Id": 52254,
+      "Name": "Standard Spectrum Dye"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 284,
+    "Ingredients": [
+      {
+        "Id": 52254,
+        "Name": "Standard Spectrum Dye",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 48,
+    "Output": {
+      "Id": 27841,
+      "Name": "Upland Wheat Flour"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 750,
+    "Ingredients": [
+      {
+        "Id": 27841,
+        "Name": "Upland Wheat Flour",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 49,
+    "Output": {
+      "Id": 19,
+      "Name": "Water Cluster"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 190,
+    "Ingredients": [
+      {
+        "Id": 19,
+        "Name": "Water Cluster",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 50,
+    "Output": {
+      "Id": 13,
+      "Name": "Water Crystal"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 48,
+    "Ingredients": [
+      {
+        "Id": 13,
+        "Name": "Water Crystal",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 51,
+    "Output": {
+      "Id": 7,
+      "Name": "Water Shard"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 59,
+    "Ingredients": [
+      {
+        "Id": 7,
+        "Name": "Water Shard",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 52,
+    "Output": {
+      "Id": 16,
+      "Name": "Wind Cluster"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 75,
+    "Ingredients": [
+      {
+        "Id": 16,
+        "Name": "Wind Cluster",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 53,
+    "Output": {
+      "Id": 10,
+      "Name": "Wind Crystal"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 50,
+    "Ingredients": [
+      {
+        "Id": 10,
+        "Name": "Wind Crystal",
+        "Qty": 1
+      }
+    ]
+  },
+  {
+    "Index": 54,
+    "Output": {
+      "Id": 4,
+      "Name": "Wind Shard"
+    },
+    "RecipeRowId": 0,
+    "RecipeNumber": 1,
+    "OutputValue": 46,
+    "Ingredients": [
+      {
+        "Id": 4,
+        "Name": "Wind Shard",
+        "Qty": 1
+      }
+    ]
+  }
+]

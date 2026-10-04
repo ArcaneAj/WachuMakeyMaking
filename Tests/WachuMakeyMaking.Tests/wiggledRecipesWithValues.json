@@ -1,0 +1,926 @@
+[
+  {
+    "Item": {
+      "Id": 44195,
+      "Name": "Rarefied Ra\u0027Kaznar War Scythe"
+    },
+    "Value": 198.000001,
+    "Currency": {
+      "Id": 44195,
+      "Name": "Rarefied Ra\u0027Kaznar War Scythe"
+    }
+  },
+  {
+    "Item": {
+      "Id": 5364,
+      "Name": "Ash Lumber"
+    },
+    "Value": 496.000002,
+    "Currency": {
+      "Id": 5364,
+      "Name": "Ash Lumber"
+    }
+  },
+  {
+    "Item": {
+      "Id": 6494,
+      "Name": "Firewood"
+    },
+    "Value": 7997.000003,
+    "Currency": {
+      "Id": 6494,
+      "Name": "Firewood"
+    }
+  },
+  {
+    "Item": {
+      "Id": 1754,
+      "Name": "Iron War Axe"
+    },
+    "Value": 1490.000004,
+    "Currency": {
+      "Id": 1754,
+      "Name": "Iron War Axe"
+    }
+  },
+  {
+    "Item": {
+      "Id": 2548,
+      "Name": "Iron Hatchet"
+    },
+    "Value": 5000.000005,
+    "Currency": {
+      "Id": 2548,
+      "Name": "Iron Hatchet"
+    }
+  },
+  {
+    "Item": {
+      "Id": 6401,
+      "Name": "Riviera Arched Window"
+    },
+    "Value": 3000.000006,
+    "Currency": {
+      "Id": 6401,
+      "Name": "Riviera Arched Window"
+    }
+  },
+  {
+    "Item": {
+      "Id": 6404,
+      "Name": "Glade Classical Window"
+    },
+    "Value": 4448.000007,
+    "Currency": {
+      "Id": 6404,
+      "Name": "Glade Classical Window"
+    }
+  },
+  {
+    "Item": {
+      "Id": 6409,
+      "Name": "Oasis Octagonal Window"
+    },
+    "Value": 1700.000008,
+    "Currency": {
+      "Id": 6409,
+      "Name": "Oasis Octagonal Window"
+    }
+  },
+  {
+    "Item": {
+      "Id": 43340,
+      "Name": "Black Star Earrings of Crafting"
+    },
+    "Value": 50000.000009,
+    "Currency": {
+      "Id": 43340,
+      "Name": "Black Star Earrings of Crafting"
+    }
+  },
+  {
+    "Item": {
+      "Id": 43342,
+      "Name": "Black Star Bracelets of Crafting"
+    },
+    "Value": 100000.00001,
+    "Currency": {
+      "Id": 43342,
+      "Name": "Black Star Bracelets of Crafting"
+    }
+  },
+  {
+    "Item": {
+      "Id": 43343,
+      "Name": "Black Star Ring of Crafting"
+    },
+    "Value": 45000.000011,
+    "Currency": {
+      "Id": 43343,
+      "Name": "Black Star Ring of Crafting"
+    }
+  },
+  {
+    "Item": {
+      "Id": 49215,
+      "Name": "Rose Garnet"
+    },
+    "Value": 26000.000012,
+    "Currency": {
+      "Id": 49215,
+      "Name": "Rose Garnet"
+    }
+  },
+  {
+    "Item": {
+      "Id": 36081,
+      "Name": "Garlean Cheese"
+    },
+    "Value": 505.000013,
+    "Currency": {
+      "Id": 36081,
+      "Name": "Garlean Cheese"
+    }
+  },
+  {
+    "Item": {
+      "Id": 5092,
+      "Name": "Iron Rivets"
+    },
+    "Value": 100.000014,
+    "Currency": {
+      "Id": 5092,
+      "Name": "Iron Rivets"
+    }
+  },
+  {
+    "Item": {
+      "Id": 7018,
+      "Name": "Iron Nails"
+    },
+    "Value": 402.000015,
+    "Currency": {
+      "Id": 7018,
+      "Name": "Iron Nails"
+    }
+  },
+  {
+    "Item": {
+      "Id": 5072,
+      "Name": "Iron Plate"
+    },
+    "Value": 1000.000016,
+    "Currency": {
+      "Id": 5072,
+      "Name": "Iron Plate"
+    }
+  },
+  {
+    "Item": {
+      "Id": 5082,
+      "Name": "Iron Rings"
+    },
+    "Value": 50.000017,
+    "Currency": {
+      "Id": 5082,
+      "Name": "Iron Rings"
+    }
+  },
+  {
+    "Item": {
+      "Id": 7021,
+      "Name": "Iron Joint Plate"
+    },
+    "Value": 4.000018,
+    "Currency": {
+      "Id": 7021,
+      "Name": "Iron Joint Plate"
+    }
+  },
+  {
+    "Item": {
+      "Id": 51252,
+      "Name": "Rod of Nihility Display"
+    },
+    "Value": 699999.000019,
+    "Currency": {
+      "Id": 51252,
+      "Name": "Rod of Nihility Display"
+    }
+  },
+  {
+    "Item": {
+      "Id": 2318,
+      "Name": "Initiate\u0027s Saw"
+    },
+    "Value": 5000.00002,
+    "Currency": {
+      "Id": 2318,
+      "Name": "Initiate\u0027s Saw"
+    }
+  },
+  {
+    "Item": {
+      "Id": 2496,
+      "Name": "Iron Skillet"
+    },
+    "Value": 26038.000021,
+    "Currency": {
+      "Id": 2496,
+      "Name": "Iron Skillet"
+    }
+  },
+  {
+    "Item": {
+      "Id": 6432,
+      "Name": "Oasis Wooden Awning"
+    },
+    "Value": 2500.000022,
+    "Currency": {
+      "Id": 6432,
+      "Name": "Oasis Wooden Awning"
+    }
+  },
+  {
+    "Item": {
+      "Id": 2708,
+      "Name": "Iron Sallet"
+    },
+    "Value": 20000.000023,
+    "Currency": {
+      "Id": 2708,
+      "Name": "Iron Sallet"
+    }
+  },
+  {
+    "Item": {
+      "Id": 3563,
+      "Name": "Iron Gauntlets"
+    },
+    "Value": 9999.000024,
+    "Currency": {
+      "Id": 3563,
+      "Name": "Iron Gauntlets"
+    }
+  },
+  {
+    "Item": {
+      "Id": 3045,
+      "Name": "Iron Cuirass"
+    },
+    "Value": 10017.000025,
+    "Currency": {
+      "Id": 3045,
+      "Name": "Iron Cuirass"
+    }
+  },
+  {
+    "Item": {
+      "Id": 2712,
+      "Name": "Iron Celata"
+    },
+    "Value": 10010.000026,
+    "Currency": {
+      "Id": 2712,
+      "Name": "Iron Celata"
+    }
+  },
+  {
+    "Item": {
+      "Id": 2472,
+      "Name": "Iron Alembic"
+    },
+    "Value": 10026.000027,
+    "Currency": {
+      "Id": 2472,
+      "Name": "Iron Alembic"
+    }
+  },
+  {
+    "Item": {
+      "Id": 2242,
+      "Name": "Iron Scutum"
+    },
+    "Value": 10000.000028,
+    "Currency": {
+      "Id": 2242,
+      "Name": "Iron Scutum"
+    }
+  },
+  {
+    "Item": {
+      "Id": 3579,
+      "Name": "Heavy Iron Gauntlets"
+    },
+    "Value": 16.000029,
+    "Currency": {
+      "Id": 3579,
+      "Name": "Heavy Iron Gauntlets"
+    }
+  },
+  {
+    "Item": {
+      "Id": 2248,
+      "Name": "Iron Kite Shield"
+    },
+    "Value": 10014.00003,
+    "Currency": {
+      "Id": 2248,
+      "Name": "Iron Kite Shield"
+    }
+  },
+  {
+    "Item": {
+      "Id": 52633,
+      "Name": "Arm of Unmaking"
+    },
+    "Value": 153997.000031,
+    "Currency": {
+      "Id": 52633,
+      "Name": "Arm of Unmaking"
+    }
+  },
+  {
+    "Item": {
+      "Id": 5383,
+      "Name": "Ash Log"
+    },
+    "Value": 133.000032,
+    "Currency": {
+      "Id": 5383,
+      "Name": "Ash Log"
+    }
+  },
+  {
+    "Item": {
+      "Id": 8146,
+      "Name": "Battlecraft Demimateria II"
+    },
+    "Value": 297.000033,
+    "Currency": {
+      "Id": 8146,
+      "Name": "Battlecraft Demimateria II"
+    }
+  },
+  {
+    "Item": {
+      "Id": 8147,
+      "Name": "Battlecraft Demimateria III"
+    },
+    "Value": 500.000034,
+    "Currency": {
+      "Id": 8147,
+      "Name": "Battlecraft Demimateria III"
+    }
+  },
+  {
+    "Item": {
+      "Id": 44012,
+      "Name": "Black Star"
+    },
+    "Value": 749.000035,
+    "Currency": {
+      "Id": 44012,
+      "Name": "Black Star"
+    }
+  },
+  {
+    "Item": {
+      "Id": 19123,
+      "Name": "Blade of Revelry"
+    },
+    "Value": 8998.000036,
+    "Currency": {
+      "Id": 19123,
+      "Name": "Blade of Revelry"
+    }
+  },
+  {
+    "Item": {
+      "Id": 14181,
+      "Name": "Blank Grade 1 Orchestrion Roll"
+    },
+    "Value": 400.000037,
+    "Currency": {
+      "Id": 14181,
+      "Name": "Blank Grade 1 Orchestrion Roll"
+    }
+  },
+  {
+    "Item": {
+      "Id": 14182,
+      "Name": "Blank Grade 2 Orchestrion Roll"
+    },
+    "Value": 4000.000038,
+    "Currency": {
+      "Id": 14182,
+      "Name": "Blank Grade 2 Orchestrion Roll"
+    }
+  },
+  {
+    "Item": {
+      "Id": 14183,
+      "Name": "Blank Grade 3 Orchestrion Roll"
+    },
+    "Value": 4949.000039,
+    "Currency": {
+      "Id": 14183,
+      "Name": "Blank Grade 3 Orchestrion Roll"
+    }
+  },
+  {
+    "Item": {
+      "Id": 5512,
+      "Name": "Clear Glass Lens"
+    },
+    "Value": 130.00004,
+    "Currency": {
+      "Id": 5512,
+      "Name": "Clear Glass Lens"
+    }
+  },
+  {
+    "Item": {
+      "Id": 19846,
+      "Name": "Cottonseed Oil"
+    },
+    "Value": 198.000041,
+    "Currency": {
+      "Id": 19846,
+      "Name": "Cottonseed Oil"
+    }
+  },
+  {
+    "Item": {
+      "Id": 35792,
+      "Name": "Crystal of Divine Light"
+    },
+    "Value": 699999.000042,
+    "Currency": {
+      "Id": 35792,
+      "Name": "Crystal of Divine Light"
+    }
+  },
+  {
+    "Item": {
+      "Id": 35791,
+      "Name": "Crystal of Eternal Darkness"
+    },
+    "Value": 6000.000043,
+    "Currency": {
+      "Id": 35791,
+      "Name": "Crystal of Eternal Darkness"
+    }
+  },
+  {
+    "Item": {
+      "Id": 33819,
+      "Name": "Diamond Plating"
+    },
+    "Value": 20000.000044,
+    "Currency": {
+      "Id": 33819,
+      "Name": "Diamond Plating"
+    }
+  },
+  {
+    "Item": {
+      "Id": 49214,
+      "Name": "Double Duraluminum Ingot"
+    },
+    "Value": 20000.000045,
+    "Currency": {
+      "Id": 49214,
+      "Name": "Double Duraluminum Ingot"
+    }
+  },
+  {
+    "Item": {
+      "Id": 17,
+      "Name": "Earth Cluster"
+    },
+    "Value": 60.000046,
+    "Currency": {
+      "Id": 17,
+      "Name": "Earth Cluster"
+    }
+  },
+  {
+    "Item": {
+      "Id": 11,
+      "Name": "Earth Crystal"
+    },
+    "Value": 44.000047,
+    "Currency": {
+      "Id": 11,
+      "Name": "Earth Crystal"
+    }
+  },
+  {
+    "Item": {
+      "Id": 5,
+      "Name": "Earth Shard"
+    },
+    "Value": 8.000048,
+    "Currency": {
+      "Id": 5,
+      "Name": "Earth Shard"
+    }
+  },
+  {
+    "Item": {
+      "Id": 36238,
+      "Name": "Enchanted Manganese Ink"
+    },
+    "Value": 6490.000049,
+    "Currency": {
+      "Id": 36238,
+      "Name": "Enchanted Manganese Ink"
+    }
+  },
+  {
+    "Item": {
+      "Id": 49225,
+      "Name": "Everkeep Resin"
+    },
+    "Value": 6554.00005,
+    "Currency": {
+      "Id": 49225,
+      "Name": "Everkeep Resin"
+    }
+  },
+  {
+    "Item": {
+      "Id": 8149,
+      "Name": "Fieldcraft Demimateria II"
+    },
+    "Value": 3209.000051,
+    "Currency": {
+      "Id": 8149,
+      "Name": "Fieldcraft Demimateria II"
+    }
+  },
+  {
+    "Item": {
+      "Id": 8150,
+      "Name": "Fieldcraft Demimateria III"
+    },
+    "Value": 1400.000052,
+    "Currency": {
+      "Id": 8150,
+      "Name": "Fieldcraft Demimateria III"
+    }
+  },
+  {
+    "Item": {
+      "Id": 14,
+      "Name": "Fire Cluster"
+    },
+    "Value": 40.000053,
+    "Currency": {
+      "Id": 14,
+      "Name": "Fire Cluster"
+    }
+  },
+  {
+    "Item": {
+      "Id": 8,
+      "Name": "Fire Crystal"
+    },
+    "Value": 39.000054,
+    "Currency": {
+      "Id": 8,
+      "Name": "Fire Crystal"
+    }
+  },
+  {
+    "Item": {
+      "Id": 2,
+      "Name": "Fire Shard"
+    },
+    "Value": 40.000055,
+    "Currency": {
+      "Id": 2,
+      "Name": "Fire Shard"
+    }
+  },
+  {
+    "Item": {
+      "Id": 27838,
+      "Name": "Frantoio Oil"
+    },
+    "Value": 1000.000056,
+    "Currency": {
+      "Id": 27838,
+      "Name": "Frantoio Oil"
+    }
+  },
+  {
+    "Item": {
+      "Id": 44057,
+      "Name": "Gargantua Hide"
+    },
+    "Value": 149.000057,
+    "Currency": {
+      "Id": 44057,
+      "Name": "Gargantua Hide"
+    }
+  },
+  {
+    "Item": {
+      "Id": 46188,
+      "Name": "Goldentail"
+    },
+    "Value": 4485.000058,
+    "Currency": {
+      "Id": 46188,
+      "Name": "Goldentail"
+    }
+  },
+  {
+    "Item": {
+      "Id": 4868,
+      "Name": "Gysahl Greens"
+    },
+    "Value": 167.000059,
+    "Currency": {
+      "Id": 4868,
+      "Name": "Gysahl Greens"
+    }
+  },
+  {
+    "Item": {
+      "Id": 15,
+      "Name": "Ice Cluster"
+    },
+    "Value": 40.00006,
+    "Currency": {
+      "Id": 15,
+      "Name": "Ice Cluster"
+    }
+  },
+  {
+    "Item": {
+      "Id": 9,
+      "Name": "Ice Crystal"
+    },
+    "Value": 41.000061,
+    "Currency": {
+      "Id": 9,
+      "Name": "Ice Crystal"
+    }
+  },
+  {
+    "Item": {
+      "Id": 3,
+      "Name": "Ice Shard"
+    },
+    "Value": 40.000062,
+    "Currency": {
+      "Id": 3,
+      "Name": "Ice Shard"
+    }
+  },
+  {
+    "Item": {
+      "Id": 27952,
+      "Name": "Immaculate Wingblade"
+    },
+    "Value": 3000.000063,
+    "Currency": {
+      "Id": 27952,
+      "Name": "Immaculate Wingblade"
+    }
+  },
+  {
+    "Item": {
+      "Id": 5057,
+      "Name": "Iron Ingot"
+    },
+    "Value": 2.000064,
+    "Currency": {
+      "Id": 5057,
+      "Name": "Iron Ingot"
+    }
+  },
+  {
+    "Item": {
+      "Id": 4702,
+      "Name": "Knight\u0027s Bread"
+    },
+    "Value": 304.000065,
+    "Currency": {
+      "Id": 4702,
+      "Name": "Knight\u0027s Bread"
+    }
+  },
+  {
+    "Item": {
+      "Id": 27835,
+      "Name": "Lemonette"
+    },
+    "Value": 719.000066,
+    "Currency": {
+      "Id": 27835,
+      "Name": "Lemonette"
+    }
+  },
+  {
+    "Item": {
+      "Id": 18,
+      "Name": "Lightning Cluster"
+    },
+    "Value": 95.000067,
+    "Currency": {
+      "Id": 18,
+      "Name": "Lightning Cluster"
+    }
+  },
+  {
+    "Item": {
+      "Id": 12,
+      "Name": "Lightning Crystal"
+    },
+    "Value": 48.000068,
+    "Currency": {
+      "Id": 12,
+      "Name": "Lightning Crystal"
+    }
+  },
+  {
+    "Item": {
+      "Id": 6,
+      "Name": "Lightning Shard"
+    },
+    "Value": 45.000069,
+    "Currency": {
+      "Id": 6,
+      "Name": "Lightning Shard"
+    }
+  },
+  {
+    "Item": {
+      "Id": 36255,
+      "Name": "Ovibos Milk"
+    },
+    "Value": 398.00007,
+    "Currency": {
+      "Id": 36255,
+      "Name": "Ovibos Milk"
+    }
+  },
+  {
+    "Item": {
+      "Id": 39583,
+      "Name": "Pearl of Flames"
+    },
+    "Value": 89997.000071,
+    "Currency": {
+      "Id": 39583,
+      "Name": "Pearl of Flames"
+    }
+  },
+  {
+    "Item": {
+      "Id": 38675,
+      "Name": "Pearl of Winds"
+    },
+    "Value": 235048.000072,
+    "Currency": {
+      "Id": 38675,
+      "Name": "Pearl of Winds"
+    }
+  },
+  {
+    "Item": {
+      "Id": 44001,
+      "Name": "Ra\u0027Kaznar Ingot"
+    },
+    "Value": 2500.000073,
+    "Currency": {
+      "Id": 44001,
+      "Name": "Ra\u0027Kaznar Ingot"
+    }
+  },
+  {
+    "Item": {
+      "Id": 4757,
+      "Name": "Rolanberry Cheese"
+    },
+    "Value": 180.000074,
+    "Currency": {
+      "Id": 4757,
+      "Name": "Rolanberry Cheese"
+    }
+  },
+  {
+    "Item": {
+      "Id": 49209,
+      "Name": "Rose Garnet Ore"
+    },
+    "Value": 1230.000075,
+    "Currency": {
+      "Id": 49209,
+      "Name": "Rose Garnet Ore"
+    }
+  },
+  {
+    "Item": {
+      "Id": 12894,
+      "Name": "Sour Cream"
+    },
+    "Value": 250.000076,
+    "Currency": {
+      "Id": 12894,
+      "Name": "Sour Cream"
+    }
+  },
+  {
+    "Item": {
+      "Id": 52254,
+      "Name": "Standard Spectrum Dye"
+    },
+    "Value": 284.000077,
+    "Currency": {
+      "Id": 52254,
+      "Name": "Standard Spectrum Dye"
+    }
+  },
+  {
+    "Item": {
+      "Id": 27841,
+      "Name": "Upland Wheat Flour"
+    },
+    "Value": 750.000078,
+    "Currency": {
+      "Id": 27841,
+      "Name": "Upland Wheat Flour"
+    }
+  },
+  {
+    "Item": {
+      "Id": 19,
+      "Name": "Water Cluster"
+    },
+    "Value": 190.000079,
+    "Currency": {
+      "Id": 19,
+      "Name": "Water Cluster"
+    }
+  },
+  {
+    "Item": {
+      "Id": 13,
+      "Name": "Water Crystal"
+    },
+    "Value": 48.00008,
+    "Currency": {
+      "Id": 13,
+      "Name": "Water Crystal"
+    }
+  },
+  {
+    "Item": {
+      "Id": 7,
+      "Name": "Water Shard"
+    },
+    "Value": 59.000081,
+    "Currency": {
+      "Id": 7,
+      "Name": "Water Shard"
+    }
+  },
+  {
+    "Item": {
+      "Id": 16,
+      "Name": "Wind Cluster"
+    },
+    "Value": 75.000082,
+    "Currency": {
+      "Id": 16,
+      "Name": "Wind Cluster"
+    }
+  },
+  {
+    "Item": {
+      "Id": 10,
+      "Name": "Wind Crystal"
+    },
+    "Value": 50.000083,
+    "Currency": {
+      "Id": 10,
+      "Name": "Wind Crystal"
+    }
+  },
+  {
+    "Item": {
+      "Id": 4,
+      "Name": "Wind Shard"
+    },
+    "Value": 46.000084,
+    "Currency": {
+      "Id": 4,
+      "Name": "Wind Shard"
+    }
+  }
+]

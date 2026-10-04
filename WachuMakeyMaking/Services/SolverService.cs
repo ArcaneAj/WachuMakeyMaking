@@ -6,16 +6,21 @@ using WachuMakeyMaking.Models;
 
 namespace WachuMakeyMaking.Services
 {
-    public class SolverService(Action<string> log, Action<string> logError)
+    public class SolverService(Action<string> log, Action<string> logError, IRecipeService recipeService)
     {
         private readonly Action<string> log = log;
         private readonly Action<string> logError = logError;
+        private readonly IRecipeService recipeService = recipeService;
         private readonly List<Action<State, string, Solution?>> progressListeners = [];
         private State state = State.Idle;
         private Solution currentBest = null!;
+        private Dictionary<int, ModItem> variableIndexToItem = new();
         private double lowerBound = 0.0;
         private string progressMessage = string.Empty;
         private CancellationTokenSource cancellationTokenSource = new();
+
+        public Dictionary<ModItem, ModItemWithValue> ItemsWithValues { get; private set; } = [];
+        public Dictionary<ModItem, ModItemWithValue> WiggledItemsWithValues { get; private set; } = [];
 
         public enum State
         {
@@ -53,10 +58,50 @@ namespace WachuMakeyMaking.Services
             }
         }
 
-        public Solution Solve(List<ModRecipeWithValue> recipes, ModItemStack[] resources)
+        public Solution Solve(Dictionary<ModItem, ModItemWithValue> itemsWithValues, Dictionary<ModItem, ModItemWithValue> wiggledItemsWithValues)
         {
+            this.ItemsWithValues = itemsWithValues;
+            this.WiggledItemsWithValues = wiggledItemsWithValues;
+            
             try
             {
+                // Build recipes list in the same ordering the tests expect: iterate the provided wiggled outputs in order,
+                // add their recipe variants.
+                var outputs = this.WiggledItemsWithValues.Values.ToList();
+                var recipes = new List<ModRecipeWithValue>();
+
+                var resources = this.recipeService.SelectedIngredients ?? new List<ModItemStack>();
+
+                // Add recipe variants for each wiggled output (preserve ordering).
+                // If an output has no service recipes but is a selected resource, add a synthetic self-recipe
+                // so the solver can choose to "sell" that item.
+                foreach (var output in outputs)
+                {
+                    var serviceRecipes = this.recipeService.GetRecipesByOutput(output.Item) ?? new List<ModRecipe>();
+                    var value = output.Value;
+                    var currency = output.Currency;
+                    if (serviceRecipes.Count > 0)
+                    {
+                        foreach (var r in serviceRecipes)
+                        {
+                            recipes.Add(new ModRecipeWithValue(r, value, currency));
+                        }
+                    }
+                    else
+                    {
+                        // If the wiggled output has no service recipes, add a synthetic self-recipe so it can be selected.
+                        var synthetic = new ModRecipe(0, output.Item, 1, new Dictionary<ModItem, byte> { [output.Item] = 1 }, 0, 0, 0, 0);
+                        recipes.Add(new ModRecipeWithValue(synthetic, value, currency));
+                    }
+                }
+
+                // Build variable index -> item mapping (one variable per recipe variant in recipes list).
+                this.variableIndexToItem = new Dictionary<int, ModItem>();
+                for (var i = 0; i < recipes.Count; i++)
+                {
+                    this.variableIndexToItem[i] = recipes[i].Item;
+                }
+
                 if (recipes.Count == 0)
                 {
                     Reset();
@@ -81,10 +126,6 @@ namespace WachuMakeyMaking.Services
                     constraintsList.Add(resource.Quantity);
                     var row = recipes.Select(recipe => (int)recipe.Ingredients.GetValueOrDefault(resource.Item));
                     assignmentsList.Add([.. row]);
-
-                    var recipesUsingResource = recipes
-                        .Where(recipe => recipe.Ingredients.ContainsKey(resource.Item))
-                        .ToList();
                 }
 
                 var branches = new Stack<Branch>();
@@ -130,7 +171,7 @@ namespace WachuMakeyMaking.Services
             return this.currentBest;
         }
 
-        private bool BranchAndBound(Problem problem, Solution previousResult, CancellationToken cancellationToken)
+        private bool BranchAndBound(Problem problem, ContinuousSolution previousResult, CancellationToken cancellationToken)
         {
             var valuesToBranch = previousResult
                 .Values.Select((val, index) => (val, index))
@@ -138,11 +179,22 @@ namespace WachuMakeyMaking.Services
                 .ToList();
 
             // If we're integral, check if this is the best solution so far
-            if (valuesToBranch.Count == 0)
+                if (valuesToBranch.Count == 0)
             {
                 if (previousResult.OptimalValue < (this.currentBest?.OptimalValue ?? 0.0))
                 {
-                    this.currentBest = previousResult;
+                    // Convert continuous integral result to discrete Solution mapping variables to ModItemStacks
+                    var stacks = new List<ModItemStack>();
+                    for (var i = 0; i < previousResult.Values.Count; i++)
+                    {
+                        var qty = (int)Math.Round(previousResult.Values[i]);
+                        var item = this.variableIndexToItem.GetValueOrDefault(i);
+                        if (item != null)
+                        {
+                            stacks.Add(new ModItemStack(item, item.RowId, qty));
+                        }
+                    }
+                    this.currentBest = new Solution(stacks, previousResult.OptimalValue, State.Optimal, previousResult.Branches);
                     if (this.state == State.FindingInitialSolution)
                     {
                         UpdateProgress(State.Optimising, "Optimising...", this.currentBest);
@@ -241,7 +293,7 @@ namespace WachuMakeyMaking.Services
             return false;
         }
 
-        private static Solution Solve(Problem problem, Stack<Branch> branches, CancellationToken cancellationToken)
+        private static ContinuousSolution Solve(Problem problem, Stack<Branch> branches, CancellationToken cancellationToken)
         {
             try
             {
@@ -252,7 +304,7 @@ namespace WachuMakeyMaking.Services
                     || problem.Assignments.Any(x => x.Length != problem.Assignments[0].Length)
                 )
                 {
-                    return new Solution([], 0, State.Error, branches);
+                    return new ContinuousSolution(new List<double>(), 0, State.Error, branches);
                 }
 
                 var m = problem.Assignments.Length; // number of constraints (resources)
@@ -260,7 +312,7 @@ namespace WachuMakeyMaking.Services
 
                 if (problem.Costs.Length != n || problem.Constraints.Length != m)
                 {
-                    return new Solution([], 0, State.Error, branches);
+                    return new ContinuousSolution(new List<double>(), 0, State.Error, branches);
                 }
 
                 var branchConstraints = new List<int>();
@@ -335,21 +387,27 @@ namespace WachuMakeyMaking.Services
                     {
                         solution.Add(result.x[i]);
                     }
-                    return new Solution(solution, result.optimalValue, State.Optimal, branches);
+                    return new ContinuousSolution(solution, result.optimalValue, State.Optimal, branches);
                 }
                 else if (result.status == "unbounded")
                 {
-                    return new Solution([], 0, State.Unbounded, branches);
+                    return new ContinuousSolution(new List<double>(), 0, State.Unbounded, branches);
                 }
                 else
                 {
-                    return new Solution([], 0, State.Error, branches);
+                    return new ContinuousSolution(new List<double>(), 0, State.Error, branches);
                 }
             }
             catch (Exception)
             {
-                return new Solution([], 0, State.Error, branches);
+                return new ContinuousSolution(new List<double>(), 0, State.Error, branches);
             }
+        }
+
+        // Public helper used by tests to run the continuous LP solver directly
+        public static ContinuousSolution SolveProblem(Problem problem, Stack<Branch> branches, CancellationToken cancellationToken)
+        {
+            return Solve(problem, branches, cancellationToken);
         }
 
         private static (string status, double[] x, double optimalValue, int[] basis) RevisedSimplex(
@@ -554,7 +612,30 @@ namespace WachuMakeyMaking.Services
 
     public record Problem(int[][] Assignments, double[] Costs, int[] Constraints);
 
-    public record Solution(List<double> Values, double OptimalValue, SolverService.State State, Stack<Branch> Branches)
+    // Continuous solution used by LP solver and tests
+    public record ContinuousSolution(List<double> Values, double OptimalValue, SolverService.State State, Stack<Branch> Branches)
+    {
+        public virtual bool Equals(ContinuousSolution? other)
+        {
+            if (other is null)
+                return false;
+            if (ReferenceEquals(this, other))
+                return true;
+
+            return State == other.State
+                && Math.Abs(OptimalValue - other.OptimalValue) < 1e-10
+                && Values.SequenceEqual(other.Values)
+                && Branches.SequenceEqual(other.Branches);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(State, OptimalValue, Values, Branches);
+        }
+    }
+
+    // Public discrete solution mapping variables back to actual items with quantities
+    public record Solution(List<ModItemStack> Values, double OptimalValue, SolverService.State State, Stack<Branch> Branches)
     {
         public virtual bool Equals(Solution? other)
         {
@@ -574,13 +655,14 @@ namespace WachuMakeyMaking.Services
             return HashCode.Combine(State, OptimalValue, Values, Branches);
         }
 
-        public void Print(List<ModRecipeWithValue> recipes, Action<string> log)
+        public void Print(Action<string> log)
         {
             log($"===============================================================================");
             log($"State: {State}");
-            for (var i = 0; i < recipes.Count; i++)
+            for (var i = 0; i < Values.Count; i++)
             {
-                log($"  Craft [{Values[i]}]: {recipes[i].Item.Name}");
+                var v = Values[i];
+                log($"  Craft [{v.Quantity}]: {v.Item.Name}");
             }
 
             log($"Total value: {Math.Floor(OptimalValue)} gil");

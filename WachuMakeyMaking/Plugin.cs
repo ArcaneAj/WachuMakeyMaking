@@ -3,7 +3,10 @@ using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using System;
+using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
+using WachuMakeyMaking.Utils;
 using WachuMakeyMaking.Windows;
 
 namespace WachuMakeyMaking;
@@ -47,16 +50,18 @@ public sealed class Plugin : IDalamudPlugin
     private CollectableService CollectableService { get; init; }
     public InventoryService InventoryService { get; init; }
     private SolverService SolverService { get; init; }
-    private RecipeCacheService RecipeCacheService { get; init; }
+    public RecipeService RecipeService { get; init; }
+    private TabService TabService { get; init; }
 
     public Plugin()
     {
         UniversalisService = new UniversalisService();
         CollectableService = new CollectableService();
         InventoryService = new InventoryService();
-        RecipeCacheService = new RecipeCacheService(UniversalisService, CollectableService, InventoryService);
-        SolverService = new SolverService(l => Log.Info(l), l => Log.Error(l));
-        MainWindow = new MainWindow(RecipeCacheService, SolverService, InventoryService);
+        RecipeService = new RecipeService(UniversalisService, CollectableService);
+        SolverService = new SolverService(l => Log.Info(l), l => Log.Error(l), RecipeService);
+        TabService = new TabService(RecipeService, InventoryService, SolverService);
+        MainWindow = new MainWindow(TabService, InventoryService);
 
         WindowSystem.AddWindow(MainWindow);
 
@@ -71,6 +76,21 @@ public sealed class Plugin : IDalamudPlugin
         // Adds a button to the plugin installer entry of this plugin which allows
         // toggling the display status of the main ui
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
+
+        ClientState.Login += OnLogin;
+        ClientState.Logout += OnLogout;
+    }
+
+    private void OnLogout(int type, int code)
+    {
+        "Logged OUT!".Log();
+        InventoryService.Clear();
+    }
+
+    private void OnLogin()
+    {
+        "Logged IN!".Log();
+        InventoryService.Init();
     }
 
     public void Dispose()
@@ -78,6 +98,7 @@ public sealed class Plugin : IDalamudPlugin
         // Unregister all actions to not leak anything during disposal of plugin
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
+        ClientState.Login -= OnLogin;
 
         WindowSystem.RemoveAllWindows();
 

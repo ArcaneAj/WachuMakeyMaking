@@ -5,7 +5,9 @@ VisualStudioVersion = 18.2.11408.102
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WachuMakeyMaking", "WachuMakeyMaking\WachuMakeyMaking.csproj", "{13C812E9-0D42-4B95-8646-40EEBF30636F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "Test\Test.csproj", "{8E4CB441-3EBF-4770-B251-569DB1D5E9CA}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WachuMakeyMaking.Tests", "Tests\WachuMakeyMaking.Tests\WachuMakeyMaking.Tests.csproj", "{8E583678-3B84-4922-AA99-E44A9836B41D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,13 +19,16 @@ Global
 		{13C812E9-0D42-4B95-8646-40EEBF30636F}.Debug|x64.Build.0 = Debug|x64
 		{13C812E9-0D42-4B95-8646-40EEBF30636F}.Release|x64.ActiveCfg = Release|x64
 		{13C812E9-0D42-4B95-8646-40EEBF30636F}.Release|x64.Build.0 = Release|x64
-		{8E4CB441-3EBF-4770-B251-569DB1D5E9CA}.Debug|x64.ActiveCfg = Debug|x64
-		{8E4CB441-3EBF-4770-B251-569DB1D5E9CA}.Debug|x64.Build.0 = Debug|x64
-		{8E4CB441-3EBF-4770-B251-569DB1D5E9CA}.Release|x64.ActiveCfg = Release|x64
-		{8E4CB441-3EBF-4770-B251-569DB1D5E9CA}.Release|x64.Build.0 = Release|x64
+		{8E583678-3B84-4922-AA99-E44A9836B41D}.Debug|x64.ActiveCfg = Debug|x64
+		{8E583678-3B84-4922-AA99-E44A9836B41D}.Debug|x64.Build.0 = Debug|x64
+		{8E583678-3B84-4922-AA99-E44A9836B41D}.Release|x64.ActiveCfg = Release|x64
+		{8E583678-3B84-4922-AA99-E44A9836B41D}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{8E583678-3B84-4922-AA99-E44A9836B41D} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {B17E85B1-5F60-4440-9F9A-3DDE877E8CDF}
