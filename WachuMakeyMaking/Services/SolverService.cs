@@ -18,6 +18,10 @@ namespace WachuMakeyMaking.Services
         private double lowerBound = 0.0;
         private string progressMessage = string.Empty;
         private CancellationTokenSource cancellationTokenSource = new();
+        private readonly HashSet<string> infeasibleBranchSignatures = new();
+        // Last raw LP tuple result from RevisedSimplex for diagnostics (status, full x, optimalValue, basis)
+        private static (string status, double[] x, double optimalValue, int[] basis) lastLpTuple = ("", new double[0], 0.0, new int[0]);
+        private static string lastBasisDiagnostics = string.Empty;
 
         public Dictionary<ModItem, ModItemWithValue> ItemsWithValues { get; private set; } = [];
         public Dictionary<ModItem, ModItemWithValue> WiggledItemsWithValues { get; private set; } = [];
@@ -241,11 +245,11 @@ namespace WachuMakeyMaking.Services
         {
             var valuesToBranch = previousResult
                 .Values.Select((val, index) => (val, index))
-                .Where(x => x.val - Math.Floor(x.val) > 1e-10)
+                .Where(x => x.val - Math.Floor(x.val) > 1e-6)
                 .ToList();
 
             // If we're integral, check if this is the best solution so far
-                if (valuesToBranch.Count == 0)
+            if (valuesToBranch.Count == 0)
             {
                 if (previousResult.OptimalValue < (this.currentBest?.OptimalValue ?? 0.0))
                 {
@@ -270,7 +274,7 @@ namespace WachuMakeyMaking.Services
                         UpdateProgress(State.Optimising, this.progressMessage, this.currentBest);
                     }
                 }
-                return Math.Abs(previousResult.OptimalValue - this.lowerBound) < 1e-10;
+                return Math.Abs(previousResult.OptimalValue - this.lowerBound) < 1e-6;
             }
 
             // Branch on the least fractional variable (closest to an integer)
@@ -290,35 +294,138 @@ namespace WachuMakeyMaking.Services
             var positiveBranches = new Stack<Branch>(previousResult.Branches.Reverse());
             positiveBranches.Push(positiveBranch);
 
-            var positiveResult = Solve(problem, positiveBranches, cancellationToken);
-            if (positiveResult.OptimalValue < this.lowerBound)
+            // Build signature for this branch stack to avoid re-exploring provably infeasible branches
+            // Use a canonical representation (sort by index and sign) so the same set of constraints
+            // has the same signature regardless of push order.
+            static string BuildSignature(Stack<Branch> s)
             {
-                this.logError("Branch result was below the lower bound, something very wrong must have happened.");
+                var arr = s.ToArray(); // top-first
+                var normalized = arr
+                    .Select(b => (Index: b.Index, IsPos: b.IsPositive ? 'P' : 'N', Value: b.Value))
+                    .OrderBy(t => t.Index)
+                    .ThenBy(t => t.IsPos)
+                    .ThenBy(t => t.Value)
+                    .Select(t => $"{t.Index}:{t.IsPos}:{t.Value}");
+                return string.Join("|", normalized);
             }
-
-            if (positiveResult.State == State.Optimal)
+            var posSig = BuildSignature(positiveBranches);
+            if (this.infeasibleBranchSignatures.Contains(posSig))
             {
-                // Verify the solution satisfies the branch constraint
-                var feasible = positiveResult.Values[branchVar.index] <= floorVal + 1e-10;
-                if (!feasible)
+                this.log($"Skipping previously infeasible branch: {posSig}");
+            }
+            else
+            {
+                var positiveResult = Solve(problem, positiveBranches, cancellationToken);
+                // Runtime verification: rebuild the full constraint matrix used by Solve and verify all
+                // appended branch rows are satisfied by the returned continuous solution. Log details
+                // if any violation is detected so we can decide whether the LP returned an invalid
+                // solution or the branch wasn't appended correctly.
+                void VerifyBranchRows(Stack<Branch> branchStack, ContinuousSolution sol, string which)
                 {
-                    this.log(
-                        $"Branch constraint violated: x[{branchVar.index}] = {positiveResult.Values[branchVar.index]} > {floorVal}, skipping"
-                    );
+                    try
+                    {
+                        var origM = problem.Assignments.Length;
+                        var nVars = problem.Assignments[0].Length;
+                        if (sol?.Values == null || sol.Values.Count < nVars)
+                        {
+                            this.log($"[Verify] Skipping {which} branch verification: solution has {sol?.Values?.Count ?? 0} vars, expected {nVars}");
+                            return;
+                        }
+                        var branchConstraintsLocal = new List<int>();
+                        var branchAssignmentsLocal = new List<int[]>();
+                        foreach (var b in branchStack)
+                        {
+                            var coeff = b.IsPositive ? 1 : -1;
+                            var row = new int[nVars];
+                            row[b.Index] = coeff;
+                            branchConstraintsLocal.Add(b.Value * coeff);
+                            branchAssignmentsLocal.Add(row);
+                        }
+
+                        var fullConstraintsLocal = problem.Constraints.Concat(branchConstraintsLocal).ToArray();
+                        var fullAssignmentsLocal = problem.Assignments.Concat(branchAssignmentsLocal).ToArray();
+
+                        var tol = 1e-6;
+                        for (var k = 0; k < branchAssignmentsLocal.Count; k++)
+                        {
+                            var rowIndex = origM + k;
+                            double lhs = 0.0;
+                            var coeffRow = fullAssignmentsLocal[rowIndex];
+                            for (var j = 0; j < nVars; j++)
+                            {
+                                lhs += coeffRow[j] * sol.Values[j];
+                            }
+                            var rhs = fullConstraintsLocal[rowIndex];
+                            if (lhs > rhs + tol)
+                            {
+                                // Log detailed diagnostics
+                                this.log($"[Verify] {which} branch row violated: row={rowIndex} lhs={lhs} rhs={rhs} tol={tol}");
+                                this.log($"[Verify] Branch signature={BuildSignature(branchStack)}");
+                                this.log($"[Verify] Row coeffs: {string.Join(",", coeffRow.Select(v => v.ToString()))}");
+                                this.log($"[Verify] Var values (sample first 20): {string.Join(",", sol.Values.Take(Math.Min(20, sol.Values.Count)).Select(v => v.ToString()))}");
+                                try
+                                {
+                                    var basis = lastLpTuple.basis;
+                                    var rawX = lastLpTuple.x;
+                                    if (basis != null && basis.Length > 0)
+                                    {
+                                        this.log($"[Verify] LP basis (sample first 40): {string.Join(",", basis.Take(Math.Min(40, basis.Length)))}");
+                                    }
+                                    if (rawX != null && rawX.Length > 0)
+                                    {
+                                        this.log($"[Verify] LP raw x (sample first 40): {string.Join(",", rawX.Take(Math.Min(40, rawX.Length)).Select(v => v.ToString()))}");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    this.logError($"[Verify] Failed to log LP internals: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        this.logError($"[Verify] Failed to verify branch rows: {ex.Message}");
+                    }
+                }
+                VerifyBranchRows(positiveBranches, positiveResult, "positive");
+                if (positiveResult.OptimalValue < this.lowerBound)
+                {
+                    this.logError("Branch result was below the lower bound, something very wrong must have happened.");
+                }
+
+                // If the LP failed or is not optimal, treat this branch stack as infeasible to avoid retrying
+                if (positiveResult.State != State.Optimal)
+                {
+                    this.infeasibleBranchSignatures.Add(posSig);
+                    this.log($"Branch not optimal (state={positiveResult.State}), marking infeasible: {posSig}");
                 }
                 else
                 {
-                    // Only explore further if this could be better than current best
-                    if (this.currentBest == null || positiveResult.OptimalValue < this.currentBest.OptimalValue)
+                    // Verify the solution satisfies the branch constraint
+                    var feasible = positiveResult.Values[branchVar.index] <= floorVal + 1e-6;
+                    if (!feasible)
                     {
-                        if (this.currentBest != null)
+                        this.log(
+                            $"Branch constraint violated: x[{branchVar.index}] = {positiveResult.Values[branchVar.index]} > {floorVal}, skipping"
+                        );
+                        // Mark this branch signature as infeasible to avoid re-exploration
+                        this.infeasibleBranchSignatures.Add(posSig);
+                    }
+                    else
+                    {
+                        // Only explore further if this could be better than current best
+                        if (this.currentBest == null || positiveResult.OptimalValue < this.currentBest.OptimalValue)
                         {
-                            var message =
-                                $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
-                            this.progressMessage = message;
-                            UpdateProgress(State.Optimising, message, this.currentBest);
+                            if (this.currentBest != null)
+                            {
+                                var message =
+                                    $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
+                                this.progressMessage = message;
+                                UpdateProgress(State.Optimising, message, this.currentBest);
+                            }
+                            if (BranchAndBound(problem, positiveResult, cancellationToken)) return true;
                         }
-                        BranchAndBound(problem, positiveResult, cancellationToken);
                     }
                 }
             }
@@ -327,31 +434,108 @@ namespace WachuMakeyMaking.Services
             var negativeBranch = new Branch(branchVar.index, ceilVal, false);
             var negativeBranches = new Stack<Branch>(previousResult.Branches.Reverse());
             negativeBranches.Push(negativeBranch);
-
-            var negativeResult = Solve(problem, negativeBranches, cancellationToken);
-            if (negativeResult.State == State.Optimal)
+            var negSig = BuildSignature(negativeBranches);
+            if (this.infeasibleBranchSignatures.Contains(negSig))
             {
-                // Verify the solution satisfies the branch constraint
-                var feasible = negativeResult.Values[branchVar.index] >= ceilVal - 1e-10;
-                if (!feasible)
+                this.log($"Skipping previously infeasible branch: {negSig}");
+            }
+            else
+            {
+                var negativeResult = Solve(problem, negativeBranches, cancellationToken);
+                // Verify branch rows for negative branch stack as well
+                void VerifyBranchRowsNeg(Stack<Branch> branchStack, ContinuousSolution sol, string which)
                 {
-                    this.log(
-                        $"Branch constraint violated: x[{branchVar.index}] = {negativeResult.Values[branchVar.index]} < {ceilVal}, skipping"
-                    );
-                }
-                else
-                {
-                    // Only explore further if this could be better than current best
-                    if (this.currentBest == null || negativeResult.OptimalValue < this.currentBest.OptimalValue)
+                    try
                     {
-                        if (this.currentBest != null)
+                        var origM = problem.Assignments.Length;
+                        var nVars = problem.Assignments[0].Length;
+                        if (sol?.Values == null || sol.Values.Count < nVars)
                         {
-                            var message =
-                                $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
-                            this.progressMessage = message;
-                            UpdateProgress(State.Optimising, message, this.currentBest);
+                            this.log($"[Verify] Skipping {which} branch verification: solution has {sol?.Values?.Count ?? 0} vars, expected {nVars}");
+                            return;
                         }
-                        BranchAndBound(problem, negativeResult, cancellationToken);
+                        var branchConstraintsLocal = new List<int>();
+                        var branchAssignmentsLocal = new List<int[]>();
+                        foreach (var b in branchStack)
+                        {
+                            var coeff = b.IsPositive ? 1 : -1;
+                            var row = new int[nVars];
+                            row[b.Index] = coeff;
+                            branchConstraintsLocal.Add(b.Value * coeff);
+                            branchAssignmentsLocal.Add(row);
+                        }
+
+                        var fullConstraintsLocal = problem.Constraints.Concat(branchConstraintsLocal).ToArray();
+                        var fullAssignmentsLocal = problem.Assignments.Concat(branchAssignmentsLocal).ToArray();
+
+                        var tol = 1e-6;
+                        for (var k = 0; k < branchAssignmentsLocal.Count; k++)
+                        {
+                            var rowIndex = origM + k;
+                            double lhs = 0.0;
+                            var coeffRow = fullAssignmentsLocal[rowIndex];
+                            for (var j = 0; j < nVars; j++)
+                            {
+                                lhs += coeffRow[j] * sol.Values[j];
+                            }
+                            var rhs = fullConstraintsLocal[rowIndex];
+                            if (lhs > rhs + tol)
+                            {
+                                this.log($"[Verify] {which} branch row violated: row={rowIndex} lhs={lhs} rhs={rhs} tol={tol}");
+                                this.log($"[Verify] Branch signature={BuildSignature(branchStack)}");
+                                this.log($"[Verify] Row coeffs: {string.Join(",", coeffRow.Select(v => v.ToString()))}");
+                                this.log($"[Verify] Var values (sample first 20): {string.Join(",", sol.Values.Take(Math.Min(20, sol.Values.Count)).Select(v => v.ToString()))}");
+                                try
+                                {
+                                    var basis = lastLpTuple.basis;
+                                    var rawX = lastLpTuple.x;
+                                    if (basis != null && basis.Length > 0)
+                                    {
+                                        this.log($"[Verify] LP basis (sample first 40): {string.Join(",", basis.Take(Math.Min(40, basis.Length)))}");
+                                    }
+                                    if (rawX != null && rawX.Length > 0)
+                                    {
+                                        this.log($"[Verify] LP raw x (sample first 40): {string.Join(",", rawX.Take(Math.Min(40, rawX.Length)).Select(v => v.ToString()))}");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    this.logError($"[Verify] Failed to log LP internals: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        this.logError($"[Verify] Failed to verify branch rows: {ex.Message}");
+                    }
+                }
+                VerifyBranchRowsNeg(negativeBranches, negativeResult, "negative");
+                if (negativeResult.State == State.Optimal)
+                {
+                    // Verify the solution satisfies the branch constraint
+                    var feasible = negativeResult.Values[branchVar.index] >= ceilVal - 1e-6;
+                    if (!feasible)
+                    {
+                        this.log(
+                            $"Branch constraint violated: x[{branchVar.index}] = {negativeResult.Values[branchVar.index]} < {ceilVal}, skipping"
+                        );
+                        this.infeasibleBranchSignatures.Add(negSig);
+                    }
+                    else
+                    {
+                        // Only explore further if this could be better than current best
+                        if (this.currentBest == null || negativeResult.OptimalValue < this.currentBest.OptimalValue)
+                        {
+                            if (this.currentBest != null)
+                            {
+                                var message =
+                                    $"Optimising... Current best: {-Math.Floor(this.currentBest.OptimalValue)} gil with Upper bound: {-Math.Floor(this.lowerBound)}";
+                                this.progressMessage = message;
+                                UpdateProgress(State.Optimising, message, this.currentBest);
+                            }
+                        if (BranchAndBound(problem, negativeResult, cancellationToken)) return true;
+                        }
                     }
                 }
             }
@@ -417,7 +601,23 @@ namespace WachuMakeyMaking.Services
                     x[n + i] = fullConstraints[i];
                 }
 
-                // Create augmented coefficient matrix [A | I]
+                // Create augmented coefficient matrix [A | I] (we may need artificials for Phase I)
+                var fullAssignmentsCopy = fullAssignments.Select(row => row.ToArray()).ToArray();
+                var fullConstraintsCopy = fullConstraints.ToArray();
+
+                // Track rows that were flipped to make RHS non-negative
+                var flipped = new bool[m];
+                for (var i = 0; i < m; i++)
+                {
+                    if (fullConstraintsCopy[i] < 0)
+                    {
+                        flipped[i] = true;
+                        fullConstraintsCopy[i] = -fullConstraintsCopy[i];
+                        for (var j = 0; j < n; j++) fullAssignmentsCopy[i][j] = -fullAssignmentsCopy[i][j];
+                    }
+                }
+
+                // Build A_augmented for Phase II (original variables + slack)
                 var A_augmented = new double[m][];
                 for (var i = 0; i < m; i++)
                 {
@@ -425,37 +625,232 @@ namespace WachuMakeyMaking.Services
                     // Copy original coefficients (convert int to double)
                     for (var j = 0; j < n; j++)
                     {
-                        A_augmented[i][j] = fullAssignments[i][j];
+                        A_augmented[i][j] = fullAssignmentsCopy[i][j];
                     }
-                    // Add identity matrix for slack variables
+                    // Add slack variables; if row was flipped the slack coefficient is -1
                     for (var j = 0; j < m; j++)
                     {
-                        A_augmented[i][n + j] = (i == j) ? 1 : 0;
+                        A_augmented[i][n + j] = (i == j) ? (flipped[i] ? -1 : 1) : 0;
                     }
                 }
 
                 // Augmented costs: [c | 0] (zeros for slack variables)
                 var c_augmented = new double[n + m];
-                for (var j = 0; j < n; j++)
+                for (var j = 0; j < n; j++) c_augmented[j] = problem.Costs[j];
+
+                // Initial solution x: original variables zero, slack = b
+                var x_phase2 = new double[n + m];
+                for (var i = 0; i < m; i++) x_phase2[n + i] = fullConstraintsCopy[i];
+
+                // Solve using two-phase revised simplex if any slack initial RHS is negative (infeasible)
+                var tupleResultFinal = (status: "", x: new double[0], optimalValue: 0.0, basis: new int[0]);
+                var needPhaseI = x_phase2.Any(v => v < -1e-12);
+                if (!needPhaseI)
                 {
-                    c_augmented[j] = problem.Costs[j];
+                    // Basis is slack variables n..n+m-1
+                    for (var i = 0; i < m; i++) basis[i] = n + i;
+                    // Pre-check basis feasibility: B * x_B == b ?
+                    try
+                    {
+                        var tol = 1e-6;
+                        var B = new double[m][];
+                        for (var r = 0; r < m; r++) B[r] = new double[m];
+                        for (var col = 0; col < m; col++)
+                        {
+                            var varIndex = basis[col];
+                            for (var row = 0; row < m; row++)
+                            {
+                                B[row][col] = (varIndex >= 0 && varIndex < A_augmented[row].Length) ? A_augmented[row][varIndex] : 0;
+                            }
+                        }
+                        var xB = new double[m];
+                        for (var col = 0; col < m; col++) xB[col] = x_phase2[basis[col]];
+                        // Compute B * xB
+                        var residual = new double[m];
+                        for (var row = 0; row < m; row++)
+                        {
+                            double s = 0;
+                            for (var col = 0; col < m; col++) s += B[row][col] * xB[col];
+                            residual[row] = s - fullConstraintsCopy[row];
+                        }
+                        var maxResidual = residual.Max(r => Math.Abs(r));
+                        if (maxResidual > tol)
+                        {
+                            lastBasisDiagnostics = $"Pre-basis check failed: maxResidual={maxResidual}; sample residuals={string.Join(",", residual.Take(Math.Min(10, residual.Length)))}; basisSample={string.Join(",", basis.Take(Math.Min(40,basis.Length)))}";
+                            // Return error with zero-filled values to preserve expected variable count
+                            return new ContinuousSolution(Enumerable.Repeat(0.0, n).ToList(), 0, State.Error, branches);
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // ignore and continue to solver
+                    }
+                    tupleResultFinal = RevisedSimplex(A_augmented, c_augmented, n, m, basis, x_phase2, cancellationToken);
                 }
-                // Slack variables have cost 0
+                else
+                {
+                    // Phase I: build matrix with artificials appended
+                    // Columns: [original (n) | slack (m) | artificials (m)] -> totalCols = n + 2*m
+                    var totalColsPhaseI = n + 2 * m;
+                    var A_phaseI = new double[m][];
+                    for (var i = 0; i < m; i++)
+                    {
+                        A_phaseI[i] = new double[totalColsPhaseI];
+                        // original
+                        for (var j = 0; j < n; j++) A_phaseI[i][j] = fullAssignmentsCopy[i][j];
+                        // slack
+                        for (var j = 0; j < m; j++) A_phaseI[i][n + j] = (i == j) ? (flipped[i] ? -1 : 1) : 0;
+                        // artificials (identity)
+                        for (var j = 0; j < m; j++) A_phaseI[i][n + m + j] = (i == j) ? 1 : 0;
+                    }
 
-                // Solve using revised simplex
-                var result = RevisedSimplex(A_augmented, c_augmented, n, m, basis, x, cancellationToken);
+                    // Phase I costs: zeros for original+slack, ones for artificials
+                    var c_phaseI = new double[totalColsPhaseI];
+                    for (var j = n + m; j < totalColsPhaseI; j++) c_phaseI[j] = 1.0;
 
-                if (result.status == "optimal")
+                    // Initial basis: artificials (indices n+m .. n+2m-1)
+                    var basisPhaseI = new int[m];
+                    for (var i = 0; i < m; i++) basisPhaseI[i] = n + m + i;
+
+                    // Initial x for phase I: artificials = b
+                    var x_phaseI = new double[totalColsPhaseI];
+                    for (var i = 0; i < m; i++) x_phaseI[n + m + i] = fullConstraintsCopy[i];
+
+                    var phaseIResult = RevisedSimplex(A_phaseI, c_phaseI, n, m, basisPhaseI, x_phaseI, cancellationToken);
+                    if (phaseIResult.status != "optimal")
+                    {
+                        return new ContinuousSolution(Enumerable.Repeat(0.0, n).ToList(), 0, State.Error, branches);
+                    }
+                    // If Phase I objective > eps, infeasible
+                    if (phaseIResult.optimalValue > 1e-6)
+                    {
+                        return new ContinuousSolution(Enumerable.Repeat(0.0, n).ToList(), 0, State.Unbounded, branches);
+                    }
+
+                    // Prepare Phase II: remove artificials and use basis from phaseI, replacing any artificial basics
+                    // Build A_augmented (already built) and c_augmented (already built)
+                    // Start basis for phase II from phaseIResult.basis, but replace artificials
+                    var basisPhase2 = phaseIResult.basis.ToArray();
+                    for (var i = 0; i < m; i++)
+                    {
+                        if (basisPhase2[i] >= n + m)
+                        {
+                            // try to find a non-artificial column with non-zero coeff in this row that is not already in basis
+                            var found = false;
+                            for (var j = 0; j < n + m; j++)
+                            {
+                                if (Math.Abs(A_augmented[i][j]) > 1e-12 && !basisPhase2.Contains(j))
+                                {
+                                    basisPhase2[i] = j;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found)
+                            {
+                                // fallback to slack column for this row
+                                basisPhase2[i] = n + i;
+                            }
+                        }
+                    }
+
+                    // Prepare x for phase II from phaseI result (trim artificials)
+                    var x_phase2_from_phaseI = new double[n + m];
+                    for (var j = 0; j < n + m && j < phaseIResult.x.Length; j++) x_phase2_from_phaseI[j] = phaseIResult.x[j];
+
+                    // Pre-check basis feasibility for phase II basis
+                    try
+                    {
+                        var tol = 1e-6;
+                        var B = new double[m][];
+                        for (var r = 0; r < m; r++) B[r] = new double[m];
+                        for (var col = 0; col < m; col++)
+                        {
+                            var varIndex = basisPhase2[col];
+                            for (var row = 0; row < m; row++)
+                            {
+                                B[row][col] = (varIndex >= 0 && varIndex < A_augmented[row].Length) ? A_augmented[row][varIndex] : 0;
+                            }
+                        }
+                        var xB = new double[m];
+                        for (var col = 0; col < m; col++) xB[col] = x_phase2_from_phaseI[basisPhase2[col]];
+                        var residual = new double[m];
+                        for (var row = 0; row < m; row++)
+                        {
+                            double s = 0;
+                            for (var col = 0; col < m; col++) s += B[row][col] * xB[col];
+                            residual[row] = s - fullConstraintsCopy[row];
+                        }
+                        var maxResidual = residual.Max(r => Math.Abs(r));
+                    if (maxResidual > tol)
+                    {
+                        lastBasisDiagnostics = $"Pre-basis check (phaseI) failed: maxResidual={maxResidual}; sample residuals={string.Join(",", residual.Take(Math.Min(10, residual.Length)))}; basisSample={string.Join(",", basisPhase2.Take(Math.Min(40,basisPhase2.Length)))}";
+                        return new ContinuousSolution(Enumerable.Repeat(0.0, n).ToList(), 0, State.Error, branches);
+                    }
+                    }
+                    catch (Exception)
+                    {
+                        // ignore and continue
+                    }
+
+                    tupleResultFinal = RevisedSimplex(A_augmented, c_augmented, n, m, basisPhase2, x_phase2_from_phaseI, cancellationToken);
+                }
+
+                // Save raw LP tuple for diagnostics (status, full x vector, optimalValue, basis)
+                // Store before we convert to ContinuousSolution so BranchAndBound diagnostics
+                // can inspect the actual LP basis/x that the revised simplex produced.
+                lastLpTuple = tupleResultFinal;
+
+                // Post-check: verify returned x satisfies Ax <= b for the augmented A and fullConstraintsCopy
+                try
+                {
+                    var tol = 1e-6;
+                    var violated = false;
+                    for (var i = 0; i < m; i++)
+                    {
+                        double lhs = 0.0;
+                        for (var j = 0; j < A_augmented[i].Length && j < tupleResultFinal.x.Length; j++)
+                        {
+                            lhs += A_augmented[i][j] * tupleResultFinal.x[j];
+                        }
+                        var rhs = fullConstraintsCopy[i];
+                        if (lhs > rhs + tol)
+                        {
+                        // LP returned solution violating row {i}; mark as violated so caller treats as error
+                            violated = true;
+                        }
+                    }
+                    if (violated)
+                    {
+                        // Treat as error so BranchAndBound will mark branch infeasible
+                        tupleResultFinal = ("error", tupleResultFinal.x, tupleResultFinal.optimalValue, tupleResultFinal.basis);
+                        // Log diagnostics: include LP status, pre-basis diagnostics and the normalized x length
+                        try
+                        {
+                            var status = tupleResultFinal.status;
+                            var diag = $"LP post-check failed: status={status} optimalValue={tupleResultFinal.optimalValue} xLen={tupleResultFinal.x.Length} basisLen={(tupleResultFinal.basis==null?0:tupleResultFinal.basis.Length)}";
+                            if (!string.IsNullOrEmpty(lastBasisDiagnostics)) diag += " | lastBasisDiagnostics=" + lastBasisDiagnostics;
+                            lastBasisDiagnostics = diag;
+                        }
+                        catch { }
+                    }
+                }
+                catch (Exception)
+                {
+                    // ignore verification errors in static Solve
+                }
+
+                if (tupleResultFinal.status == "optimal")
                 {
                     // Extract solution (only original variables)
                     var solution = new List<double>();
                     for (var i = 0; i < n; i++)
                     {
-                        solution.Add(result.x[i]);
+                        solution.Add(tupleResultFinal.x[i]);
                     }
-                    return new ContinuousSolution(solution, result.optimalValue, State.Optimal, branches);
+                    return new ContinuousSolution(solution, tupleResultFinal.optimalValue, State.Optimal, branches);
                 }
-                else if (result.status == "unbounded")
+                else if (tupleResultFinal.status == "unbounded")
                 {
                     return new ContinuousSolution(new List<double>(), 0, State.Unbounded, branches);
                 }
@@ -487,16 +882,32 @@ namespace WachuMakeyMaking.Services
         )
         {
             cancellationToken.ThrowIfCancellationRequested();
-            // Initialize basis inverse (identity matrix)
-            var B_inv = new double[m][];
-            for (var i = 0; i < m; i++)
+            // Build initial basis inverse from the provided basis columns
+            var totalCols = c.Length;
+            // Helper to normalize returned x to totalCols length
+            double[] NormalizeX(double[] src)
             {
-                B_inv[i] = new double[m];
-                for (var j = 0; j < m; j++)
+                var full = new double[totalCols];
+                if (src != null)
                 {
-                    B_inv[i][j] = (i == j) ? 1 : 0;
+                    for (var i = 0; i < Math.Min(src.Length, totalCols); i++) full[i] = src[i];
+                }
+                return full;
+            }
+            // Build basis matrix B (m x m) where column k = A[:, basis[k]]
+            var B = new double[m][];
+            for (var i = 0; i < m; i++) B[i] = new double[m];
+            for (var col = 0; col < m; col++)
+            {
+                var varIndex = basis[col];
+                for (var row = 0; row < m; row++)
+                {
+                    // If varIndex is within A columns, take value, otherwise assume 0
+                    if (varIndex >= 0 && varIndex < A[row].Length) B[row][col] = A[row][varIndex]; else B[row][col] = 0;
                 }
             }
+
+            var B_inv = InvertMatrix(B);
 
             var iteration = 0;
             const int maxIterations = 1000;
@@ -507,25 +918,15 @@ namespace WachuMakeyMaking.Services
                 iteration++;
 
                 // Compute reduced costs: c_j - c_B * B_inv * A_j
-                var reducedCosts = new double[n + m];
+                var reducedCosts = new double[totalCols];
 
-                for (var j = 0; j < n + m; j++)
+                for (var j = 0; j < totalCols; j++)
                 {
-                    // Get column A_j
+                    // Get column A_j from A (generalized)
                     var A_j = new double[m];
-                    if (j < n)
+                    for (var i = 0; i < m; i++)
                     {
-                        // Original variable - use column from A
-                        for (var i = 0; i < m; i++)
-                        {
-                            A_j[i] = A[i][j];
-                        }
-                    }
-                    else
-                    {
-                        // Slack variable - identity matrix column
-                        var slackIndex = j - n;
-                        A_j[slackIndex] = 1;
+                        if (j >= 0 && j < A[i].Length) A_j[i] = A[i][j]; else A_j[i] = 0;
                     }
 
                     // Compute y = B_inv * A_j
@@ -542,33 +943,28 @@ namespace WachuMakeyMaking.Services
 
                 // Check optimality (for minimization, all reduced costs >= 0)
                 var minReducedCost = reducedCosts.Min();
-                if (minReducedCost >= -1e-10)
+                if (minReducedCost >= -1e-6)
                 {
                     // Optimal solution found
                     double optimalValue = 0;
                     for (var i = 0; i < m; i++)
                     {
-                        optimalValue += c[basis[i]] * x[basis[i]];
+                        // basis[i] may be >= totalCols; guard index
+                        var bi = basis[i];
+                        var xi = (bi >= 0 && bi < x.Length) ? x[bi] : 0.0;
+                        optimalValue += c[basis[i]] * xi;
                     }
-                    return ("optimal", x, optimalValue, basis);
+                    return ("optimal", NormalizeX(x), optimalValue, basis);
                 }
 
                 // Choose entering variable (most negative reduced cost)
                 var enteringVar = Array.IndexOf(reducedCosts, minReducedCost);
 
-                // Get entering column
+                // Get entering column from A
                 var A_entering = new double[m];
-                if (enteringVar < n)
+                for (var i = 0; i < m; i++)
                 {
-                    for (var i = 0; i < m; i++)
-                    {
-                        A_entering[i] = A[i][enteringVar];
-                    }
-                }
-                else
-                {
-                    var slackIndex = enteringVar - n;
-                    A_entering[slackIndex] = 1;
+                    if (enteringVar >= 0 && enteringVar < A[i].Length) A_entering[i] = A[i][enteringVar]; else A_entering[i] = 0;
                 }
 
                 // Compute direction: d = B_inv * A_entering
@@ -580,7 +976,7 @@ namespace WachuMakeyMaking.Services
 
                 for (var i = 0; i < m; i++)
                 {
-                    if (d[i] > 1e-10)
+                    if (d[i] > 1e-6)
                     {
                         var ratio = x[basis[i]] / d[i];
                         if (ratio < minRatio)
@@ -593,7 +989,7 @@ namespace WachuMakeyMaking.Services
 
                 if (leavingVar == -1)
                 {
-                    return ("unbounded", x, 0, basis);
+                    return ("unbounded", NormalizeX(x), 0, basis);
                 }
 
                 // Update solution and basis
@@ -601,10 +997,7 @@ namespace WachuMakeyMaking.Services
                 var theta = x[leavingVarIndex] / d[leavingVar];
 
                 // Update all basic variables: x_B = x_B - theta * d
-                for (var i = 0; i < m; i++)
-                {
-                    x[basis[i]] -= theta * d[i];
-                }
+                for (var i = 0; i < m; i++) x[basis[i]] -= theta * d[i];
 
                 // Set entering variable to theta and leaving variable to 0
                 x[enteringVar] = theta;
@@ -634,7 +1027,53 @@ namespace WachuMakeyMaking.Services
                 B_inv = MatrixMultiply(E, B_inv);
             }
 
-            return ("max_iterations", x, 0, basis);
+            return ("max_iterations", NormalizeX(x), 0, basis);
+        }
+
+        private static double[][] InvertMatrix(double[][] matrix)
+        {
+            var n = matrix.Length;
+            var A = new double[n][];
+            for (var i = 0; i < n; i++)
+            {
+                A[i] = new double[n * 2];
+                for (var j = 0; j < n; j++) A[i][j] = matrix[i][j];
+                for (var j = 0; j < n; j++) A[i][n + j] = (i == j) ? 1 : 0;
+            }
+
+            // Gauss-Jordan
+            for (var col = 0; col < n; col++)
+            {
+                // find pivot
+                var pivot = col;
+                for (var r = col; r < n; r++) if (Math.Abs(A[r][col]) > Math.Abs(A[pivot][col])) pivot = r;
+                if (Math.Abs(A[pivot][col]) < 1e-12) throw new Exception("Singular matrix");
+                // swap
+                if (pivot != col)
+                {
+                    var tmp = A[col];
+                    A[col] = A[pivot];
+                    A[pivot] = tmp;
+                }
+                // normalize
+                var div = A[col][col];
+                for (var j = 0; j < 2 * n; j++) A[col][j] /= div;
+                // eliminate
+                for (var r = 0; r < n; r++) if (r != col)
+                {
+                    var factor = A[r][col];
+                    if (Math.Abs(factor) < 1e-15) continue;
+                    for (var j = 0; j < 2 * n; j++) A[r][j] -= factor * A[col][j];
+                }
+            }
+
+            var inv = new double[n][];
+            for (var i = 0; i < n; i++)
+            {
+                inv[i] = new double[n];
+                for (var j = 0; j < n; j++) inv[i][j] = A[i][n + j];
+            }
+            return inv;
         }
 
         private static double[] MatrixVectorMultiply(double[][] matrix, double[] vector)
@@ -689,7 +1128,7 @@ namespace WachuMakeyMaking.Services
                 return true;
 
             return State == other.State
-                && Math.Abs(OptimalValue - other.OptimalValue) < 1e-10
+                && Math.Abs(OptimalValue - other.OptimalValue) < 1e-6
                 && Values.SequenceEqual(other.Values)
                 && Branches.SequenceEqual(other.Branches);
         }
@@ -711,7 +1150,7 @@ namespace WachuMakeyMaking.Services
                 return true;
 
             return State == other.State
-                && Math.Abs(OptimalValue - other.OptimalValue) < 1e-10
+                && Math.Abs(OptimalValue - other.OptimalValue) < 1e-6
                 && Values.SequenceEqual(other.Values)
                 && Branches.SequenceEqual(other.Branches);
         }
