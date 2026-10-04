@@ -26,6 +26,68 @@ namespace WachuMakeyMaking.Tests
         }
 
         [Fact]
+        public void CanUseSyntheticIntermediaries_WithNoneInInventory_CanChooseRecipe()
+        {
+            // Create items
+            var itemA = new ModItem(1, "A");
+            var itemB = new ModItem(2, "B");
+            var itemC = new ModItem(3, "C");
+
+            // Outputs (recipes) - three different result items
+            var outputA = new ModItem(10, "recipeA");
+            var outputB = new ModItem(11, "recipeB");
+
+            // Values: recipeA=5, recipeB=10; selling itemA and itemB = 4 each; recipeC=40
+            var mvA = new ModItemWithValue(outputA, 50.0, gil);
+            var mvB = new ModItemWithValue(outputB, 10.0, gil);
+            var sellA = new ModItemWithValue(itemA, 4.0, gil);
+            var sellB = new ModItemWithValue(itemB, 4.0, gil);
+
+            var recipesWithValues = new Dictionary<ModItem, ModItemWithValue>()
+            {
+                [outputA] = mvA,
+                [outputB] = mvB,
+                [itemA] = sellA,
+                [itemB] = sellB,
+            };
+
+            var wiggled = Wiggle(recipesWithValues);
+
+            // Build recipe variants: recipeA consumes outputB for a large profit, recipeB consumes 1A+1B for a smaller profit
+            var recipeA = new ModRecipe(100, outputA, 1, new Dictionary<ModItem, byte> { [outputB] = 1 }, 0, 0, 0, 0);
+            var recipeB = new ModRecipe(101, outputB, 1, new Dictionary<ModItem, byte> { [itemA] = 1, [itemB] = 1 }, 0, 0, 0, 0);
+
+            var fakeRecipeService = new FakeRecipeService()
+            {
+                SelectedIngredients =
+                [
+                    new(itemA, itemA.RowId, 4),
+                    new(itemB, itemB.RowId, 5),
+                ]
+            };
+            fakeRecipeService.SetRecipesForOutput(outputA, [recipeA]);
+            fakeRecipeService.SetRecipesForOutput(outputB, [recipeB]);
+
+            // Create solver
+            var solver = new SolverService(_ => { }, _ => { }, fakeRecipeService);
+
+            var result = solver.Solve(recipesWithValues, wiggled);
+
+            Assert.Equal(SolverService.State.Optimal, result.State);
+
+            // Variables: [recipeA, recipeB, sellA, sellB]
+            Assert.Equal(4, result.Values.Count);
+
+            // Selling both ingredients is more valuable here (4 each) than crafting, so expect all sold
+            Assert.Equal(4.0, (double)result.Values[0].Quantity, DecimalPlaces); // recipeA
+            Assert.Equal(0.0, (double)result.Values[1].Quantity, DecimalPlaces); // recipeB
+            Assert.Equal(0.0, (double)result.Values[2].Quantity, DecimalPlaces); // sellA
+            Assert.Equal(1.0, (double)result.Values[3].Quantity, DecimalPlaces); // sellB
+
+            Assert.Equal(-204.0, result.OptimalValue, DecimalPlaces);
+        }
+
+        [Fact]
         public void IngredientsCanBeSold_WithRecipeC_ChooseBestCombination()
         {
             // Create items

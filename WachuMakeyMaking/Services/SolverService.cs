@@ -80,11 +80,77 @@ namespace WachuMakeyMaking.Services
                     var serviceRecipes = this.recipeService.GetRecipesByOutput(output.Item) ?? new List<ModRecipe>();
                     var value = output.Value;
                     var currency = output.Currency;
+
+                    // Helper: determine if an item exists in selected resources
+                    static bool IsInResources(ModItem item, IEnumerable<ModItemStack> resources)
+                        => resources.Any(r => r.Item.Equals(item));
+
+                    // If there are service recipes, flatten any intermediate ingredients that are not in resources
+                    // by replacing them with their own recipe ingredients. This produces one or more expanded
+                    // recipe variants which are added to the solver. If no service recipes exist, add a
+                    // synthetic self-recipe so the solver can choose to "sell" that item.
                     if (serviceRecipes.Count > 0)
                     {
                         foreach (var r in serviceRecipes)
                         {
-                            recipes.Add(new ModRecipeWithValue(r, value, currency));
+                            // We'll produce a set of expanded recipes starting from r. Use a queue to
+                            // iteratively replace any ingredient that itself can be produced by service recipes
+                            // and is NOT present in the selected resources list.
+                            var queue = new Queue<ModRecipe>();
+                            queue.Enqueue(r);
+
+                            while (queue.Count > 0)
+                            {
+                                var current = queue.Dequeue();
+
+                                // Find first ingredient that is not available as a resource but has its own recipes
+                                var missingIntermediate = current.Ingredients.Keys
+                                    .FirstOrDefault(ing => !IsInResources(ing, resources) && (this.recipeService.GetRecipesByOutput(ing) ?? new List<ModRecipe>()).Count > 0);
+
+                                if (missingIntermediate == null)
+                                {
+                                    // No further expansion possible, add this variant
+                                    recipes.Add(new ModRecipeWithValue(current, value, currency));
+                                    continue;
+                                }
+
+                                // Need to expand this missing intermediate using each of its service recipes
+                                var neededQty = current.Ingredients.GetValueOrDefault(missingIntermediate);
+                                var childRecipes = this.recipeService.GetRecipesByOutput(missingIntermediate) ?? new List<ModRecipe>();
+
+                                foreach (var child in childRecipes)
+                                {
+                                    // Build new ingredients dictionary: start from current and remove the intermediate
+                                    var newIngredients = new Dictionary<ModItem, int>();
+                                    foreach (var kv in current.Ingredients)
+                                    {
+                                        if (!kv.Key.Equals(missingIntermediate))
+                                        {
+                                            newIngredients[kv.Key] = newIngredients.GetValueOrDefault(kv.Key) + kv.Value;
+                                        }
+                                    }
+
+                                    // Add child's ingredients multiplied by neededQty
+                                    foreach (var ck in child.Ingredients)
+                                    {
+                                        var addQty = ck.Value * neededQty;
+                                        newIngredients[ck.Key] = newIngredients.GetValueOrDefault(ck.Key) + addQty;
+                                    }
+
+                                    // Convert ints back to byte quantities (clamp to byte.MaxValue)
+                                    var finalIngredients = new Dictionary<ModItem, byte>();
+                                    foreach (var kv in newIngredients)
+                                    {
+                                        var qty = kv.Value;
+                                        if (qty < 0) qty = 0;
+                                        if (qty > byte.MaxValue) qty = byte.MaxValue;
+                                        finalIngredients[kv.Key] = (byte)qty;
+                                    }
+
+                                    var expanded = new ModRecipe(current.RowId, current.Item, current.Number, finalIngredients, current.classJobLevel, current.classJobId, current.book, current.noteBookDivisionId);
+                                    queue.Enqueue(expanded);
+                                }
+                            }
                         }
                     }
                     else
