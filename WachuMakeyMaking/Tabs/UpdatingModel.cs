@@ -9,6 +9,7 @@ namespace WachuMakeyMaking.Tabs
         private volatile bool shouldUpdate;
         private readonly SemaphoreSlim updateLock = new(1, 1);
         private readonly Timer updateTimer;
+
         public UpdatingModel()
         {
             updateTimer = new Timer(8); // faster than 120 fps

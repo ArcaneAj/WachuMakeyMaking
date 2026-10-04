@@ -1,10 +1,10 @@
-using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.Utility;
-using Dalamud.Interface.Utility.Raii;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility.Raii;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
 using WachuMakeyMaking.Utils;
@@ -80,7 +80,7 @@ namespace WachuMakeyMaking.Tabs
                         ImGui.TableSetupColumn("Contribution", ImGuiTableColumnFlags.WidthFixed, 100.0f);
                         ImGui.TableHeadersRow();
 
-                        foreach (var (stack, index) in this.model.CurrentSolution.Values.Select((x,i) => (x,i)))
+                        foreach (var (stack, index) in this.model.CurrentSolution.Values.Select((x, i) => (x, i)))
                         {
                             var quantity = stack.Quantity;
                             if (quantity > 0)
@@ -88,14 +88,26 @@ namespace WachuMakeyMaking.Tabs
                                 var recipe = stack.Recipe;
                                 var item = recipe.Item;
                                 var itemWithValue = solverInputs.FirstOrDefault(s => s.Item.RowId == item.RowId);
-                                var value = itemWithValue?.Value ?? this.recipeService.PricesByItemId.GetValueOrDefault(item.RowId)?.Value ?? 0.0;
+                                var value =
+                                    itemWithValue?.Value
+                                    ?? this.recipeService.PricesByItemId.GetValueOrDefault(item.RowId)?.Value
+                                    ?? 0.0;
                                 ImGui.TableNextRow();
                                 ImGui.TableSetColumnIndex(0);
 
                                 var hasRecipe = recipe != null;
                                 if (recipe == null)
                                 {
-                                    recipe = new ModRecipe(0, item, 1, new Dictionary<ModItem, byte> { [item] = 1 }, 0, 0, 0, 0);
+                                    recipe = new ModRecipe(
+                                        0,
+                                        item,
+                                        1,
+                                        new Dictionary<ModItem, byte> { [item] = 1 },
+                                        0,
+                                        0,
+                                        0,
+                                        0
+                                    );
                                 }
                                 var id = $"result_{index}_{item.RowId}";
 
@@ -109,7 +121,10 @@ namespace WachuMakeyMaking.Tabs
                                 // ensure ImGui's visual open state matches our map
                                 ImGui.SetNextItemOpen(open, ImGuiCond.Always);
                                 // draw arrow so it looks like a tree node but don't push into the tree stack
-                                ImGui.TreeNodeEx("##arrow", ImGuiTreeNodeFlags.AllowItemOverlap | ImGuiTreeNodeFlags.NoTreePushOnOpen);
+                                ImGui.TreeNodeEx(
+                                    "##arrow",
+                                    ImGuiTreeNodeFlags.AllowItemOverlap | ImGuiTreeNodeFlags.NoTreePushOnOpen
+                                );
                                 // If the built-in arrow was clicked, sync our open-state map
                                 if (ImGui.IsItemClicked())
                                 {
@@ -172,22 +187,33 @@ namespace WachuMakeyMaking.Tabs
                                 {
                                     ImGui.Indent();
 
-                                    recipe.Ingredients.ToList().ForEach(ingredientWithCount =>
-                                    {
-                                        var ingredient = ingredientWithCount.Key;
-                                        var count = ingredientWithCount.Value;
-                                        var requiredQuantity = count * quantity;
+                                    recipe
+                                        .Ingredients.ToList()
+                                        .ForEach(ingredientWithCount =>
+                                        {
+                                            var ingredient = ingredientWithCount.Key;
+                                            var count = ingredientWithCount.Value;
+                                            var requiredQuantity = count * quantity;
 
-                                        UiUtils.DrawIcon(ingredient.RowId);
-                                        ImGui.SameLine();
-                                        var countToDisplay = count > 1 ? $" x{count}" : string.Empty;
-                                        ImGui.TextUnformatted($"{ingredient.Name}{countToDisplay}");
-                                        ImGui.SameLine();
-                                        var amountOwned = ownedItemsDict.GetValueOrDefault(ingredient, new ModItemStack(ingredient, 0, 0)).Quantity;
-                                        var amountConfigured = configuredItemsDict.GetValueOrDefault(ingredient, new ModItemStack(ingredient, 0, 0)).Quantity;
-                                        var differenceString = amountOwned == amountConfigured ? string.Empty : $"({amountConfigured})";
-                                        ImGui.TextUnformatted($"{amountOwned}{differenceString}/{requiredQuantity}");
-                                    });
+                                            UiUtils.DrawIcon(ingredient.RowId);
+                                            ImGui.SameLine();
+                                            var countToDisplay = count > 1 ? $" x{count}" : string.Empty;
+                                            ImGui.TextUnformatted($"{ingredient.Name}{countToDisplay}");
+                                            ImGui.SameLine();
+                                            var amountOwned = ownedItemsDict
+                                                .GetValueOrDefault(ingredient, new ModItemStack(ingredient, 0, 0))
+                                                .Quantity;
+                                            var amountConfigured = configuredItemsDict
+                                                .GetValueOrDefault(ingredient, new ModItemStack(ingredient, 0, 0))
+                                                .Quantity;
+                                            var differenceString =
+                                                amountOwned == amountConfigured
+                                                    ? string.Empty
+                                                    : $"({amountConfigured})";
+                                            ImGui.TextUnformatted(
+                                                $"{amountOwned}{differenceString}/{requiredQuantity}"
+                                            );
+                                        });
 
                                     ImGui.Unindent();
                                 }
@@ -270,7 +296,10 @@ namespace WachuMakeyMaking.Tabs
                     }
                 }
             }
-            else if (this.model.SolverState == SolverService.State.Error || this.model.SolverState == SolverService.State.Unbounded)
+            else if (
+                this.model.SolverState == SolverService.State.Error
+                || this.model.SolverState == SolverService.State.Unbounded
+            )
             {
                 ImGui.TextColored(new Vector4(1.0f, 0.0f, 0.0f, 1.0f), $"Error: {this.model.SolverProgressMessage}");
             }

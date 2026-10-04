@@ -1,9 +1,9 @@
+using System;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using System;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
 using WachuMakeyMaking.Utils;

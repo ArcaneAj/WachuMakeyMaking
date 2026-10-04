@@ -4,9 +4,18 @@ namespace WachuMakeyMaking.Models
 {
     public class ModNotebookDivision
     {
-        public string Name { get => name ?? division?.Name.ToString() ?? string.Empty; }
-        public uint RowId { get => division?.RowId ?? uint.MaxValue; }
-        public NotebookDivision? Division { get => division; }
+        public string Name
+        {
+            get => name ?? division?.Name.ToString() ?? string.Empty;
+        }
+        public uint RowId
+        {
+            get => division?.RowId ?? uint.MaxValue;
+        }
+        public NotebookDivision? Division
+        {
+            get => division;
+        }
 
         private string? name;
         private NotebookDivision? division;

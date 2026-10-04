@@ -30,6 +30,7 @@ namespace WachuMakeyMaking.Events
             this.subscriptions.Remove(key);
         }
     }
+
     public class EventSource : IEvent
     {
         private readonly Dictionary<string, Action> subscriptions = [];

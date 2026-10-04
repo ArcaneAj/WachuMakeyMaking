@@ -10,6 +10,7 @@ namespace WachuMakeyMaking.Services
         private readonly IngredientsTab ingredientsTab;
         private readonly RecipesTab recipesTab;
         private readonly ResultsTab resultsTab;
+
         // When SetActiveTab is called from outside we store the request here so we can
         // apply ImGuiTabItemFlags.SetSelected for the next Draw pass. This avoids
         // races where ImGui only honors SetSelected when provided at the right time.
@@ -22,15 +23,20 @@ namespace WachuMakeyMaking.Services
             this.resultsTab = new ResultsTab(inventoryService, recipeService, solverService);
         }
 
-        public void Draw() {
-
+        public void Draw()
+        {
             // Create tabs
             using (var tabBar = ImRaii.TabBar("MainTabs"))
             {
                 if (tabBar.Success)
                 {
                     // Tab 1: Resources
-                    using (var tab = ImRaii.TabItem("Inputs", this.pendingTab == Tab.Ingredients ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
+                    using (
+                        var tab = ImRaii.TabItem(
+                            "Inputs",
+                            this.pendingTab == Tab.Ingredients ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None
+                        )
+                    )
                     {
                         if (tab.Success)
                         {
@@ -41,7 +47,12 @@ namespace WachuMakeyMaking.Services
                     }
 
                     // Tab 2: Recipes
-                    using (var tab = ImRaii.TabItem("Outputs", this.pendingTab == Tab.Recipes ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
+                    using (
+                        var tab = ImRaii.TabItem(
+                            "Outputs",
+                            this.pendingTab == Tab.Recipes ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None
+                        )
+                    )
                     {
                         if (tab.Success)
                         {
@@ -51,7 +62,12 @@ namespace WachuMakeyMaking.Services
                     }
 
                     // Tab 3: Results
-                    using (var tab = ImRaii.TabItem("Results", this.pendingTab == Tab.Results ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
+                    using (
+                        var tab = ImRaii.TabItem(
+                            "Results",
+                            this.pendingTab == Tab.Results ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None
+                        )
+                    )
                     {
                         if (tab.Success)
                         {

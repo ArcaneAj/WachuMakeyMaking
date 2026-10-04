@@ -1,13 +1,13 @@
-using Dalamud.Bindings.ImGui;
-using Dalamud.Interface;
-using Dalamud.Interface.Utility;
-using Dalamud.Interface.Utility.Raii;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
+using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
+using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility.Raii;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
 using WachuMakeyMaking.Utils;
@@ -61,7 +61,9 @@ namespace WachuMakeyMaking.Tabs
             if (ImGui.Button("Solve"))
             {
                 // Call the solver service
-                Task.Run(() => this.solverService.Solve(this.model.RecipesWithValues, this.model.WiggledRecipesWithValues));
+                Task.Run(() =>
+                    this.solverService.Solve(this.model.RecipesWithValues, this.model.WiggledRecipesWithValues)
+                );
                 this.tabService.SetActiveTab(Tab.Results);
             }
 
@@ -87,7 +89,9 @@ namespace WachuMakeyMaking.Tabs
 
                 // Clean up currency values for currencies that are no longer in cache
                 var currentCurrencyIds = new HashSet<uint>(currencyGrouping.Select(g => g.Key));
-                var currencyIdsToRemove = this.model.CurrencyValues.Keys.Where(id => !currentCurrencyIds.Contains(id)).ToList();
+                var currencyIdsToRemove = this
+                    .model.CurrencyValues.Keys.Where(id => !currentCurrencyIds.Contains(id))
+                    .ToList();
                 foreach (var id in currencyIdsToRemove)
                 {
                     this.model.RemoveCurrencyValue(id);
@@ -229,7 +233,9 @@ namespace WachuMakeyMaking.Tabs
                             ImGui.InvisibleButton($"cell_btn_recipe_{output.RowId}", new Vector2(fullWidth, rowHeight));
                             if (ImGui.IsItemClicked())
                             {
-                                var recipe = this.recipeService.GetRecipesByOutput(output.Item).FirstOrDefault(r => r.RowId == output.RowId);
+                                var recipe = this
+                                    .recipeService.GetRecipesByOutput(output.Item)
+                                    .FirstOrDefault(r => r.RowId == output.RowId);
                                 if (recipe != null)
                                 {
                                     try
@@ -263,6 +269,5 @@ namespace WachuMakeyMaking.Tabs
                 }
             }
         }
-
     }
 }

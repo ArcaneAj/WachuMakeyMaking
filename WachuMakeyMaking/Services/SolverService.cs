@@ -20,8 +20,14 @@ namespace WachuMakeyMaking.Services
         private string progressMessage = string.Empty;
         private CancellationTokenSource cancellationTokenSource = new();
         private readonly HashSet<string> infeasibleBranchSignatures = new();
+
         // Last raw LP tuple result from RevisedSimplex for diagnostics (status, full x, optimalValue, basis)
-        private static (string status, double[] x, double optimalValue, int[] basis) LastLpTuple = ("", Array.Empty<double>(), 0.0, Array.Empty<int>());
+        private static (string status, double[] x, double optimalValue, int[] basis) LastLpTuple = (
+            "",
+            Array.Empty<double>(),
+            0.0,
+            Array.Empty<int>()
+        );
         private static string LastBasisDiagnostics = string.Empty;
 
         public Dictionary<ModItem, ModItemWithValue> ItemsWithValues { get; private set; } = [];
@@ -63,11 +69,14 @@ namespace WachuMakeyMaking.Services
             }
         }
 
-        public Solution Solve(Dictionary<ModItem, ModItemWithValue> itemsWithValues, Dictionary<ModItem, ModItemWithValue> wiggledItemsWithValues)
+        public Solution Solve(
+            Dictionary<ModItem, ModItemWithValue> itemsWithValues,
+            Dictionary<ModItem, ModItemWithValue> wiggledItemsWithValues
+        )
         {
             this.ItemsWithValues = itemsWithValues;
             this.WiggledItemsWithValues = wiggledItemsWithValues;
-            
+
             try
             {
                 var outputs = this.WiggledItemsWithValues.Values.ToList();
@@ -85,7 +94,9 @@ namespace WachuMakeyMaking.Services
                         foreach (var r in serviceRecipes)
                         {
                             var flattenedRecipes = GetFlattenedRecipes(r);
-                            recipes.AddRange(flattenedRecipes.Select(fr => new ModRecipeWithValue(fr, value, currency)));
+                            recipes.AddRange(
+                                flattenedRecipes.Select(fr => new ModRecipeWithValue(fr, value, currency))
+                            );
                         }
                     }
                     else
@@ -93,7 +104,16 @@ namespace WachuMakeyMaking.Services
                         if (FeatureFlags.AllowSellingIngredients)
                         {
                             // If the wiggled output has no service recipes, add a synthetic self-recipe so it can be selected.
-                            var synthetic = new ModRecipe(0, output.Item, 1, new Dictionary<ModItem, byte> { [output.Item] = 1 }, 0, 0, 0, 0);
+                            var synthetic = new ModRecipe(
+                                0,
+                                output.Item,
+                                1,
+                                new Dictionary<ModItem, byte> { [output.Item] = 1 },
+                                0,
+                                0,
+                                0,
+                                0
+                            );
                             recipes.Add(new ModRecipeWithValue(synthetic, value, currency));
                         }
                     }
@@ -119,7 +139,10 @@ namespace WachuMakeyMaking.Services
                 UpdateProgress(State.FindingInitialSolution, "Finding initial solution...");
 
                 var usedResources = resources.Where(x => recipes.Any(y => y.Ingredients.ContainsKey(x.Item)));
-                var resourcesWeDontHave = recipes.SelectMany(x => x.Ingredients.Keys).Where(x => !resources.Any(r => r.Item.RowId == x.RowId)).Distinct();
+                var resourcesWeDontHave = recipes
+                    .SelectMany(x => x.Ingredients.Keys)
+                    .Where(x => !resources.Any(r => r.Item.RowId == x.RowId))
+                    .Distinct();
 
                 var costs = recipes.Select(x => -x.Value * x.Number).ToArray();
 
@@ -187,17 +210,23 @@ namespace WachuMakeyMaking.Services
         {
             var combinations = GetRecipeCombinations(recipe);
 
-            return [.. combinations.Select(dict =>
-            {
-                var ingredients = dict.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => (byte)Math.Min(byte.MaxValue, kvp.Value)
-                );
+            return
+            [
+                .. combinations.Select(dict =>
+                {
+                    var ingredients = dict.ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => (byte)Math.Min(byte.MaxValue, kvp.Value)
+                    );
 
-                // Construct the new recipe variant with the flattened ingredients
-                // Adjust parameters to match your ModRecipe constructor definition
-                return recipe with { Ingredients = ingredients }; //new ModRecipe(recipe.RowId, recipe.Item, recipe.Number, ingredients, recipe.classJobLevel, recipe.classJobId, recipe.book, recipe.noteBookDivisionId);
-            })];
+                    // Construct the new recipe variant with the flattened ingredients
+                    // Adjust parameters to match your ModRecipe constructor definition
+                    return recipe with
+                    {
+                        Ingredients = ingredients,
+                    }; //new ModRecipe(recipe.RowId, recipe.Item, recipe.Number, ingredients, recipe.classJobLevel, recipe.classJobId, recipe.book, recipe.noteBookDivisionId);
+                }),
+            ];
         }
 
         private List<Dictionary<ModItem, byte>> GetRecipeCombinations(ModRecipe recipe)
@@ -220,7 +249,7 @@ namespace WachuMakeyMaking.Services
             var options = new List<Dictionary<ModItem, byte>>
             {
                 // Option 1: Keep the ingredient as-is
-                new() { [item] = amountRequired }
+                new() { [item] = amountRequired },
             };
 
             // Option 2: Expand via sub-recipes
@@ -229,9 +258,10 @@ namespace WachuMakeyMaking.Services
             {
                 // Calculate crafting cycles required based on the sub-recipe's yield (Number).
                 // e.g., requiring 3 ingots from a recipe with yield 2 requires ceil(3/2) = 2 crafts.
-                var craftsNeeded = subRecipe.Number > 0
-                    ? (int)Math.Ceiling((double)amountRequired / subRecipe.Number)
-                    : amountRequired;
+                var craftsNeeded =
+                    subRecipe.Number > 0
+                        ? (int)Math.Ceiling((double)amountRequired / subRecipe.Number)
+                        : amountRequired;
 
                 // Recursive expansion (no cycle protection needed)
                 var subCombinations = GetRecipeCombinations(subRecipe);
@@ -252,7 +282,8 @@ namespace WachuMakeyMaking.Services
         }
 
         private static List<Dictionary<ModItem, byte>> CartesianProduct(
-            List<List<Dictionary<ModItem, byte>>> optionsPerIngredient)
+            List<List<Dictionary<ModItem, byte>>> optionsPerIngredient
+        )
         {
             var result = new List<Dictionary<ModItem, byte>> { new() };
 
@@ -281,7 +312,11 @@ namespace WachuMakeyMaking.Services
             return result;
         }
 
-        private bool BranchAndBound(Problem problem, ContinuousSolution previousResult, CancellationToken cancellationToken)
+        private bool BranchAndBound(
+            Problem problem,
+            ContinuousSolution previousResult,
+            CancellationToken cancellationToken
+        )
         {
             var valuesToBranch = previousResult
                 .Values.Select((val, index) => (val, index))
@@ -304,7 +339,12 @@ namespace WachuMakeyMaking.Services
                             stacks.Add(new ModRecipeStack(recipe, recipe.RowId, qty));
                         }
                     }
-                    this.currentBest = new Solution(stacks, previousResult.OptimalValue, State.Optimal, previousResult.Branches);
+                    this.currentBest = new Solution(
+                        stacks,
+                        previousResult.OptimalValue,
+                        State.Optimal,
+                        previousResult.Branches
+                    );
                     if (this.state == State.FindingInitialSolution)
                     {
                         UpdateProgress(State.Optimising, "Optimising...", this.currentBest);
@@ -340,8 +380,7 @@ namespace WachuMakeyMaking.Services
             static string BuildSignature(Stack<Branch> s)
             {
                 var arr = s.ToArray(); // top-first
-                var normalized = arr
-                    .Select(b => (Index: b.Index, IsPos: b.IsPositive ? 'P' : 'N', Value: b.Value))
+                var normalized = arr.Select(b => (Index: b.Index, IsPos: b.IsPositive ? 'P' : 'N', Value: b.Value))
                     .OrderBy(t => t.Index)
                     .ThenBy(t => t.IsPos)
                     .ThenBy(t => t.Value)
@@ -368,7 +407,9 @@ namespace WachuMakeyMaking.Services
                         var nVars = problem.Assignments[0].Length;
                         if (sol?.Values == null || sol.Values.Count < nVars)
                         {
-                            this.log($"[Verify] Skipping {which} branch verification: solution has {sol?.Values?.Count ?? 0} vars, expected {nVars}");
+                            this.log(
+                                $"[Verify] Skipping {which} branch verification: solution has {sol?.Values?.Count ?? 0} vars, expected {nVars}"
+                            );
                             return;
                         }
                         var branchConstraintsLocal = new List<int>();
@@ -399,21 +440,31 @@ namespace WachuMakeyMaking.Services
                             if (lhs > rhs + tol)
                             {
                                 // Log detailed diagnostics
-                                this.log($"[Verify] {which} branch row violated: row={rowIndex} lhs={lhs} rhs={rhs} tol={tol}");
+                                this.log(
+                                    $"[Verify] {which} branch row violated: row={rowIndex} lhs={lhs} rhs={rhs} tol={tol}"
+                                );
                                 this.log($"[Verify] Branch signature={BuildSignature(branchStack)}");
-                                this.log($"[Verify] Row coeffs: {string.Join(",", coeffRow.Select(v => v.ToString()))}");
-                                this.log($"[Verify] Var values (sample first 20): {string.Join(",", sol.Values.Take(Math.Min(20, sol.Values.Count)).Select(v => v.ToString()))}");
+                                this.log(
+                                    $"[Verify] Row coeffs: {string.Join(",", coeffRow.Select(v => v.ToString()))}"
+                                );
+                                this.log(
+                                    $"[Verify] Var values (sample first 20): {string.Join(",", sol.Values.Take(Math.Min(20, sol.Values.Count)).Select(v => v.ToString()))}"
+                                );
                                 try
                                 {
                                     var basis = LastLpTuple.basis;
                                     var rawX = LastLpTuple.x;
                                     if (basis != null && basis.Length > 0)
                                     {
-                                        this.log($"[Verify] LP basis (sample first 40): {string.Join(",", basis.Take(Math.Min(40, basis.Length)))}");
+                                        this.log(
+                                            $"[Verify] LP basis (sample first 40): {string.Join(",", basis.Take(Math.Min(40, basis.Length)))}"
+                                        );
                                     }
                                     if (rawX != null && rawX.Length > 0)
                                     {
-                                        this.log($"[Verify] LP raw x (sample first 40): {string.Join(",", rawX.Take(Math.Min(40, rawX.Length)).Select(v => v.ToString()))}");
+                                        this.log(
+                                            $"[Verify] LP raw x (sample first 40): {string.Join(",", rawX.Take(Math.Min(40, rawX.Length)).Select(v => v.ToString()))}"
+                                        );
                                     }
                                 }
                                 catch (Exception ex)
@@ -469,7 +520,8 @@ namespace WachuMakeyMaking.Services
                                 this.progressMessage = message;
                                 UpdateProgress(State.Optimising, message, this.currentBest);
                             }
-                            if (BranchAndBound(problem, positiveResult, cancellationToken)) return true;
+                            if (BranchAndBound(problem, positiveResult, cancellationToken))
+                                return true;
                         }
                     }
                 }
@@ -496,7 +548,9 @@ namespace WachuMakeyMaking.Services
                         var nVars = problem.Assignments[0].Length;
                         if (sol?.Values == null || sol.Values.Count < nVars)
                         {
-                            this.log($"[Verify] Skipping {which} branch verification: solution has {sol?.Values?.Count ?? 0} vars, expected {nVars}");
+                            this.log(
+                                $"[Verify] Skipping {which} branch verification: solution has {sol?.Values?.Count ?? 0} vars, expected {nVars}"
+                            );
                             return;
                         }
                         var branchConstraintsLocal = new List<int>();
@@ -526,21 +580,31 @@ namespace WachuMakeyMaking.Services
                             var rhs = fullConstraintsLocal[rowIndex];
                             if (lhs > rhs + tol)
                             {
-                                this.log($"[Verify] {which} branch row violated: row={rowIndex} lhs={lhs} rhs={rhs} tol={tol}");
+                                this.log(
+                                    $"[Verify] {which} branch row violated: row={rowIndex} lhs={lhs} rhs={rhs} tol={tol}"
+                                );
                                 this.log($"[Verify] Branch signature={BuildSignature(branchStack)}");
-                                this.log($"[Verify] Row coeffs: {string.Join(",", coeffRow.Select(v => v.ToString()))}");
-                                this.log($"[Verify] Var values (sample first 20): {string.Join(",", sol.Values.Take(Math.Min(20, sol.Values.Count)).Select(v => v.ToString()))}");
+                                this.log(
+                                    $"[Verify] Row coeffs: {string.Join(",", coeffRow.Select(v => v.ToString()))}"
+                                );
+                                this.log(
+                                    $"[Verify] Var values (sample first 20): {string.Join(",", sol.Values.Take(Math.Min(20, sol.Values.Count)).Select(v => v.ToString()))}"
+                                );
                                 try
                                 {
                                     var basis = LastLpTuple.basis;
                                     var rawX = LastLpTuple.x;
                                     if (basis != null && basis.Length > 0)
                                     {
-                                        this.log($"[Verify] LP basis (sample first 40): {string.Join(",", basis.Take(Math.Min(40, basis.Length)))}");
+                                        this.log(
+                                            $"[Verify] LP basis (sample first 40): {string.Join(",", basis.Take(Math.Min(40, basis.Length)))}"
+                                        );
                                     }
                                     if (rawX != null && rawX.Length > 0)
                                     {
-                                        this.log($"[Verify] LP raw x (sample first 40): {string.Join(",", rawX.Take(Math.Min(40, rawX.Length)).Select(v => v.ToString()))}");
+                                        this.log(
+                                            $"[Verify] LP raw x (sample first 40): {string.Join(",", rawX.Take(Math.Min(40, rawX.Length)).Select(v => v.ToString()))}"
+                                        );
                                     }
                                 }
                                 catch (Exception ex)
@@ -584,7 +648,8 @@ namespace WachuMakeyMaking.Services
                                 this.progressMessage = message;
                                 UpdateProgress(State.Optimising, message, this.currentBest);
                             }
-                        if (BranchAndBound(problem, negativeResult, cancellationToken)) return true;
+                            if (BranchAndBound(problem, negativeResult, cancellationToken))
+                                return true;
                         }
                     }
                 }
@@ -593,7 +658,11 @@ namespace WachuMakeyMaking.Services
             return false;
         }
 
-        private static ContinuousSolution Solve(Problem problem, Stack<Branch> branches, CancellationToken cancellationToken)
+        private static ContinuousSolution Solve(
+            Problem problem,
+            Stack<Branch> branches,
+            CancellationToken cancellationToken
+        )
         {
             try
             {
@@ -663,7 +732,8 @@ namespace WachuMakeyMaking.Services
                     {
                         flipped[i] = true;
                         fullConstraintsCopy[i] = -fullConstraintsCopy[i];
-                        for (var j = 0; j < n; j++) fullAssignmentsCopy[i][j] = -fullAssignmentsCopy[i][j];
+                        for (var j = 0; j < n; j++)
+                            fullAssignmentsCopy[i][j] = -fullAssignmentsCopy[i][j];
                     }
                 }
 
@@ -686,11 +756,13 @@ namespace WachuMakeyMaking.Services
 
                 // Augmented costs: [c | 0] (zeros for slack variables)
                 var c_augmented = new double[n + m];
-                for (var j = 0; j < n; j++) c_augmented[j] = problem.Costs[j];
+                for (var j = 0; j < n; j++)
+                    c_augmented[j] = problem.Costs[j];
 
                 // Initial solution x: original variables zero, slack = b
                 var x_phase2 = new double[n + m];
-                for (var i = 0; i < m; i++) x_phase2[n + i] = fullConstraintsCopy[i];
+                for (var i = 0; i < m; i++)
+                    x_phase2[n + i] = fullConstraintsCopy[i];
 
                 // Solve using two-phase revised simplex if any slack initial RHS is negative (infeasible)
                 var tupleResultFinal = (status: "", x: new double[0], optimalValue: 0.0, basis: new int[0]);
@@ -698,35 +770,43 @@ namespace WachuMakeyMaking.Services
                 if (!needPhaseI)
                 {
                     // Basis is slack variables n..n+m-1
-                    for (var i = 0; i < m; i++) basis[i] = n + i;
+                    for (var i = 0; i < m; i++)
+                        basis[i] = n + i;
                     // Pre-check basis feasibility: B * x_B == b ?
                     try
                     {
                         var tol = 1e-6;
                         var B = new double[m][];
-                        for (var r = 0; r < m; r++) B[r] = new double[m];
+                        for (var r = 0; r < m; r++)
+                            B[r] = new double[m];
                         for (var col = 0; col < m; col++)
                         {
                             var varIndex = basis[col];
                             for (var row = 0; row < m; row++)
                             {
-                                B[row][col] = (varIndex >= 0 && varIndex < A_augmented[row].Length) ? A_augmented[row][varIndex] : 0;
+                                B[row][col] =
+                                    (varIndex >= 0 && varIndex < A_augmented[row].Length)
+                                        ? A_augmented[row][varIndex]
+                                        : 0;
                             }
                         }
                         var xB = new double[m];
-                        for (var col = 0; col < m; col++) xB[col] = x_phase2[basis[col]];
+                        for (var col = 0; col < m; col++)
+                            xB[col] = x_phase2[basis[col]];
                         // Compute B * xB
                         var residual = new double[m];
                         for (var row = 0; row < m; row++)
                         {
                             double s = 0;
-                            for (var col = 0; col < m; col++) s += B[row][col] * xB[col];
+                            for (var col = 0; col < m; col++)
+                                s += B[row][col] * xB[col];
                             residual[row] = s - fullConstraintsCopy[row];
                         }
                         var maxResidual = residual.Max(r => Math.Abs(r));
                         if (maxResidual > tol)
                         {
-                            LastBasisDiagnostics = $"Pre-basis check failed: maxResidual={maxResidual}; sample residuals={string.Join(",", residual.Take(Math.Min(10, residual.Length)))}; basisSample={string.Join(",", basis.Take(Math.Min(40,basis.Length)))}";
+                            LastBasisDiagnostics =
+                                $"Pre-basis check failed: maxResidual={maxResidual}; sample residuals={string.Join(",", residual.Take(Math.Min(10, residual.Length)))}; basisSample={string.Join(",", basis.Take(Math.Min(40, basis.Length)))}";
                             // Return error with zero-filled values to preserve expected variable count
                             return new ContinuousSolution(Enumerable.Repeat(0.0, n).ToList(), 0, State.Error, branches);
                         }
@@ -735,7 +815,15 @@ namespace WachuMakeyMaking.Services
                     {
                         // ignore and continue to solver
                     }
-                    tupleResultFinal = RevisedSimplex(A_augmented, c_augmented, n, m, basis, x_phase2, cancellationToken);
+                    tupleResultFinal = RevisedSimplex(
+                        A_augmented,
+                        c_augmented,
+                        n,
+                        m,
+                        basis,
+                        x_phase2,
+                        cancellationToken
+                    );
                 }
                 else
                 {
@@ -747,26 +835,40 @@ namespace WachuMakeyMaking.Services
                     {
                         A_phaseI[i] = new double[totalColsPhaseI];
                         // original
-                        for (var j = 0; j < n; j++) A_phaseI[i][j] = fullAssignmentsCopy[i][j];
+                        for (var j = 0; j < n; j++)
+                            A_phaseI[i][j] = fullAssignmentsCopy[i][j];
                         // slack
-                        for (var j = 0; j < m; j++) A_phaseI[i][n + j] = (i == j) ? (flipped[i] ? -1 : 1) : 0;
+                        for (var j = 0; j < m; j++)
+                            A_phaseI[i][n + j] = (i == j) ? (flipped[i] ? -1 : 1) : 0;
                         // artificials (identity)
-                        for (var j = 0; j < m; j++) A_phaseI[i][n + m + j] = (i == j) ? 1 : 0;
+                        for (var j = 0; j < m; j++)
+                            A_phaseI[i][n + m + j] = (i == j) ? 1 : 0;
                     }
 
                     // Phase I costs: zeros for original+slack, ones for artificials
                     var c_phaseI = new double[totalColsPhaseI];
-                    for (var j = n + m; j < totalColsPhaseI; j++) c_phaseI[j] = 1.0;
+                    for (var j = n + m; j < totalColsPhaseI; j++)
+                        c_phaseI[j] = 1.0;
 
                     // Initial basis: artificials (indices n+m .. n+2m-1)
                     var basisPhaseI = new int[m];
-                    for (var i = 0; i < m; i++) basisPhaseI[i] = n + m + i;
+                    for (var i = 0; i < m; i++)
+                        basisPhaseI[i] = n + m + i;
 
                     // Initial x for phase I: artificials = b
                     var x_phaseI = new double[totalColsPhaseI];
-                    for (var i = 0; i < m; i++) x_phaseI[n + m + i] = fullConstraintsCopy[i];
+                    for (var i = 0; i < m; i++)
+                        x_phaseI[n + m + i] = fullConstraintsCopy[i];
 
-                    var phaseIResult = RevisedSimplex(A_phaseI, c_phaseI, n, m, basisPhaseI, x_phaseI, cancellationToken);
+                    var phaseIResult = RevisedSimplex(
+                        A_phaseI,
+                        c_phaseI,
+                        n,
+                        m,
+                        basisPhaseI,
+                        x_phaseI,
+                        cancellationToken
+                    );
                     if (phaseIResult.status != "optimal")
                     {
                         return new ContinuousSolution(Enumerable.Repeat(0.0, n).ToList(), 0, State.Error, branches);
@@ -806,44 +908,60 @@ namespace WachuMakeyMaking.Services
 
                     // Prepare x for phase II from phaseI result (trim artificials)
                     var x_phase2_from_phaseI = new double[n + m];
-                    for (var j = 0; j < n + m && j < phaseIResult.x.Length; j++) x_phase2_from_phaseI[j] = phaseIResult.x[j];
+                    for (var j = 0; j < n + m && j < phaseIResult.x.Length; j++)
+                        x_phase2_from_phaseI[j] = phaseIResult.x[j];
 
                     // Pre-check basis feasibility for phase II basis
                     try
                     {
                         var tol = 1e-6;
                         var B = new double[m][];
-                        for (var r = 0; r < m; r++) B[r] = new double[m];
+                        for (var r = 0; r < m; r++)
+                            B[r] = new double[m];
                         for (var col = 0; col < m; col++)
                         {
                             var varIndex = basisPhase2[col];
                             for (var row = 0; row < m; row++)
                             {
-                                B[row][col] = (varIndex >= 0 && varIndex < A_augmented[row].Length) ? A_augmented[row][varIndex] : 0;
+                                B[row][col] =
+                                    (varIndex >= 0 && varIndex < A_augmented[row].Length)
+                                        ? A_augmented[row][varIndex]
+                                        : 0;
                             }
                         }
                         var xB = new double[m];
-                        for (var col = 0; col < m; col++) xB[col] = x_phase2_from_phaseI[basisPhase2[col]];
+                        for (var col = 0; col < m; col++)
+                            xB[col] = x_phase2_from_phaseI[basisPhase2[col]];
                         var residual = new double[m];
                         for (var row = 0; row < m; row++)
                         {
                             double s = 0;
-                            for (var col = 0; col < m; col++) s += B[row][col] * xB[col];
+                            for (var col = 0; col < m; col++)
+                                s += B[row][col] * xB[col];
                             residual[row] = s - fullConstraintsCopy[row];
                         }
                         var maxResidual = residual.Max(r => Math.Abs(r));
-                    if (maxResidual > tol)
-                    {
-                        LastBasisDiagnostics = $"Pre-basis check (phaseI) failed: maxResidual={maxResidual}; sample residuals={string.Join(",", residual.Take(Math.Min(10, residual.Length)))}; basisSample={string.Join(",", basisPhase2.Take(Math.Min(40,basisPhase2.Length)))}";
-                        return new ContinuousSolution(Enumerable.Repeat(0.0, n).ToList(), 0, State.Error, branches);
-                    }
+                        if (maxResidual > tol)
+                        {
+                            LastBasisDiagnostics =
+                                $"Pre-basis check (phaseI) failed: maxResidual={maxResidual}; sample residuals={string.Join(",", residual.Take(Math.Min(10, residual.Length)))}; basisSample={string.Join(",", basisPhase2.Take(Math.Min(40, basisPhase2.Length)))}";
+                            return new ContinuousSolution(Enumerable.Repeat(0.0, n).ToList(), 0, State.Error, branches);
+                        }
                     }
                     catch (Exception)
                     {
                         // ignore and continue
                     }
 
-                    tupleResultFinal = RevisedSimplex(A_augmented, c_augmented, n, m, basisPhase2, x_phase2_from_phaseI, cancellationToken);
+                    tupleResultFinal = RevisedSimplex(
+                        A_augmented,
+                        c_augmented,
+                        n,
+                        m,
+                        basisPhase2,
+                        x_phase2_from_phaseI,
+                        cancellationToken
+                    );
                 }
 
                 // Save raw LP tuple for diagnostics (status, full x vector, optimalValue, basis)
@@ -866,20 +984,27 @@ namespace WachuMakeyMaking.Services
                         var rhs = fullConstraintsCopy[i];
                         if (lhs > rhs + tol)
                         {
-                        // LP returned solution violating row {i}; mark as violated so caller treats as error
+                            // LP returned solution violating row {i}; mark as violated so caller treats as error
                             violated = true;
                         }
                     }
                     if (violated)
                     {
                         // Treat as error so BranchAndBound will mark branch infeasible
-                        tupleResultFinal = ("error", tupleResultFinal.x, tupleResultFinal.optimalValue, tupleResultFinal.basis);
+                        tupleResultFinal = (
+                            "error",
+                            tupleResultFinal.x,
+                            tupleResultFinal.optimalValue,
+                            tupleResultFinal.basis
+                        );
                         // Log diagnostics: include LP status, pre-basis diagnostics and the normalized x length
                         try
                         {
                             var status = tupleResultFinal.status;
-                            var diag = $"LP post-check failed: status={status} optimalValue={tupleResultFinal.optimalValue} xLen={tupleResultFinal.x.Length} basisLen={(tupleResultFinal.basis==null?0:tupleResultFinal.basis.Length)}";
-                            if (!string.IsNullOrEmpty(LastBasisDiagnostics)) diag += " | lastBasisDiagnostics=" + LastBasisDiagnostics;
+                            var diag =
+                                $"LP post-check failed: status={status} optimalValue={tupleResultFinal.optimalValue} xLen={tupleResultFinal.x.Length} basisLen={(tupleResultFinal.basis == null ? 0 : tupleResultFinal.basis.Length)}";
+                            if (!string.IsNullOrEmpty(LastBasisDiagnostics))
+                                diag += " | lastBasisDiagnostics=" + LastBasisDiagnostics;
                             LastBasisDiagnostics = diag;
                         }
                         catch { }
@@ -916,7 +1041,11 @@ namespace WachuMakeyMaking.Services
         }
 
         // Public helper used by tests to run the continuous LP solver directly
-        public static ContinuousSolution SolveProblem(Problem problem, Stack<Branch> branches, CancellationToken cancellationToken)
+        public static ContinuousSolution SolveProblem(
+            Problem problem,
+            Stack<Branch> branches,
+            CancellationToken cancellationToken
+        )
         {
             return Solve(problem, branches, cancellationToken);
         }
@@ -940,20 +1069,25 @@ namespace WachuMakeyMaking.Services
                 var full = new double[totalCols];
                 if (src != null)
                 {
-                    for (var i = 0; i < Math.Min(src.Length, totalCols); i++) full[i] = src[i];
+                    for (var i = 0; i < Math.Min(src.Length, totalCols); i++)
+                        full[i] = src[i];
                 }
                 return full;
             }
             // Build basis matrix B (m x m) where column k = A[:, basis[k]]
             var B = new double[m][];
-            for (var i = 0; i < m; i++) B[i] = new double[m];
+            for (var i = 0; i < m; i++)
+                B[i] = new double[m];
             for (var col = 0; col < m; col++)
             {
                 var varIndex = basis[col];
                 for (var row = 0; row < m; row++)
                 {
                     // If varIndex is within A columns, take value, otherwise assume 0
-                    if (varIndex >= 0 && varIndex < A[row].Length) B[row][col] = A[row][varIndex]; else B[row][col] = 0;
+                    if (varIndex >= 0 && varIndex < A[row].Length)
+                        B[row][col] = A[row][varIndex];
+                    else
+                        B[row][col] = 0;
                 }
             }
 
@@ -976,7 +1110,10 @@ namespace WachuMakeyMaking.Services
                     var A_j = new double[m];
                     for (var i = 0; i < m; i++)
                     {
-                        if (j >= 0 && j < A[i].Length) A_j[i] = A[i][j]; else A_j[i] = 0;
+                        if (j >= 0 && j < A[i].Length)
+                            A_j[i] = A[i][j];
+                        else
+                            A_j[i] = 0;
                     }
 
                     // Compute y = B_inv * A_j
@@ -1014,7 +1151,10 @@ namespace WachuMakeyMaking.Services
                 var A_entering = new double[m];
                 for (var i = 0; i < m; i++)
                 {
-                    if (enteringVar >= 0 && enteringVar < A[i].Length) A_entering[i] = A[i][enteringVar]; else A_entering[i] = 0;
+                    if (enteringVar >= 0 && enteringVar < A[i].Length)
+                        A_entering[i] = A[i][enteringVar];
+                    else
+                        A_entering[i] = 0;
                 }
 
                 // Compute direction: d = B_inv * A_entering
@@ -1047,7 +1187,8 @@ namespace WachuMakeyMaking.Services
                 var theta = x[leavingVarIndex] / d[leavingVar];
 
                 // Update all basic variables: x_B = x_B - theta * d
-                for (var i = 0; i < m; i++) x[basis[i]] -= theta * d[i];
+                for (var i = 0; i < m; i++)
+                    x[basis[i]] -= theta * d[i];
 
                 // Set entering variable to theta and leaving variable to 0
                 x[enteringVar] = theta;
@@ -1087,8 +1228,10 @@ namespace WachuMakeyMaking.Services
             for (var i = 0; i < n; i++)
             {
                 A[i] = new double[n * 2];
-                for (var j = 0; j < n; j++) A[i][j] = matrix[i][j];
-                for (var j = 0; j < n; j++) A[i][n + j] = (i == j) ? 1 : 0;
+                for (var j = 0; j < n; j++)
+                    A[i][j] = matrix[i][j];
+                for (var j = 0; j < n; j++)
+                    A[i][n + j] = (i == j) ? 1 : 0;
             }
 
             // Gauss-Jordan
@@ -1096,8 +1239,11 @@ namespace WachuMakeyMaking.Services
             {
                 // find pivot
                 var pivot = col;
-                for (var r = col; r < n; r++) if (Math.Abs(A[r][col]) > Math.Abs(A[pivot][col])) pivot = r;
-                if (Math.Abs(A[pivot][col]) < 1e-12) throw new Exception("Singular matrix");
+                for (var r = col; r < n; r++)
+                    if (Math.Abs(A[r][col]) > Math.Abs(A[pivot][col]))
+                        pivot = r;
+                if (Math.Abs(A[pivot][col]) < 1e-12)
+                    throw new Exception("Singular matrix");
                 // swap
                 if (pivot != col)
                 {
@@ -1107,21 +1253,26 @@ namespace WachuMakeyMaking.Services
                 }
                 // normalize
                 var div = A[col][col];
-                for (var j = 0; j < 2 * n; j++) A[col][j] /= div;
+                for (var j = 0; j < 2 * n; j++)
+                    A[col][j] /= div;
                 // eliminate
-                for (var r = 0; r < n; r++) if (r != col)
-                {
-                    var factor = A[r][col];
-                    if (Math.Abs(factor) < 1e-15) continue;
-                    for (var j = 0; j < 2 * n; j++) A[r][j] -= factor * A[col][j];
-                }
+                for (var r = 0; r < n; r++)
+                    if (r != col)
+                    {
+                        var factor = A[r][col];
+                        if (Math.Abs(factor) < 1e-15)
+                            continue;
+                        for (var j = 0; j < 2 * n; j++)
+                            A[r][j] -= factor * A[col][j];
+                    }
             }
 
             var inv = new double[n][];
             for (var i = 0; i < n; i++)
             {
                 inv[i] = new double[n];
-                for (var j = 0; j < n; j++) inv[i][j] = A[i][n + j];
+                for (var j = 0; j < n; j++)
+                    inv[i][j] = A[i][n + j];
             }
             return inv;
         }
@@ -1168,7 +1319,12 @@ namespace WachuMakeyMaking.Services
     public record Problem(int[][] Assignments, double[] Costs, int[] Constraints);
 
     // Continuous solution used by LP solver and tests
-    public record ContinuousSolution(List<double> Values, double OptimalValue, SolverService.State State, Stack<Branch> Branches)
+    public record ContinuousSolution(
+        List<double> Values,
+        double OptimalValue,
+        SolverService.State State,
+        Stack<Branch> Branches
+    )
     {
         public virtual bool Equals(ContinuousSolution? other)
         {
@@ -1190,7 +1346,12 @@ namespace WachuMakeyMaking.Services
     }
 
     // Public discrete solution mapping variables back to actual items with quantities
-    public record Solution(List<ModRecipeStack> Values, double OptimalValue, SolverService.State State, Stack<Branch> Branches)
+    public record Solution(
+        List<ModRecipeStack> Values,
+        double OptimalValue,
+        SolverService.State State,
+        Stack<Branch> Branches
+    )
     {
         public virtual bool Equals(Solution? other)
         {

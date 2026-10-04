@@ -1,12 +1,12 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Textures;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
 
 namespace WachuMakeyMaking.Utils
 {
@@ -28,7 +28,10 @@ namespace WachuMakeyMaking.Utils
             var iconWrap = iconTexture.GetWrapOrEmpty();
             if (iconWrap != null)
             {
-                var iconSize = new Vector2(20.0f * ImGui.GetIO().FontGlobalScale, 20.0f * ImGui.GetIO().FontGlobalScale);
+                var iconSize = new Vector2(
+                    20.0f * ImGui.GetIO().FontGlobalScale,
+                    20.0f * ImGui.GetIO().FontGlobalScale
+                );
                 ImGui.Image(iconWrap.Handle, iconSize);
 
                 if (value >= 0)
@@ -44,7 +47,15 @@ namespace WachuMakeyMaking.Utils
             }
         }
 
-        public static int DefineManualCheckbox(string categoryName, float baseX, int manualInsertions, string divisionName, ref bool primaryFlag, ref bool secondaryFlag, System.Action onChange)
+        public static int DefineManualCheckbox(
+            string categoryName,
+            float baseX,
+            int manualInsertions,
+            string divisionName,
+            ref bool primaryFlag,
+            ref bool secondaryFlag,
+            System.Action onChange
+        )
         {
             ImGui.SetCursorPosX(baseX + manualInsertions % TAG_COLS * TAG_COL_WIDTH);
             var isChecked = primaryFlag;
@@ -76,14 +87,16 @@ namespace WachuMakeyMaking.Utils
             var recipeSheet = Plugin.DataManager.GetExcelSheet<Recipe>();
             var recipe = recipeSheet.GetRow(recipeId);
             var matchingGearSets = EnumerateGearSets().Where(x => x.JobId == recipe.CraftType.RowId);
-            if (!matchingGearSets.Any()) throw new Exception($"No gearset found for job {recipe.CraftType.RowId}");
+            if (!matchingGearSets.Any())
+                throw new Exception($"No gearset found for job {recipe.CraftType.RowId}");
 
             var recipeNotebookListSheet = Plugin.DataManager.GetExcelSheet<RecipeNotebookList>();
             var recipeNotebookList = recipeNotebookListSheet.FirstOrDefault(list =>
-                list.Recipe.Any(r => r.RowId == recipeId));
+                list.Recipe.Any(r => r.RowId == recipeId)
+            );
 
             var indexInPage = -1;
-            foreach (var (r, index) in recipeNotebookList.Recipe.Select((x,i) => (x,i)))
+            foreach (var (r, index) in recipeNotebookList.Recipe.Select((x, i) => (x, i)))
             {
                 Plugin.Log.Info($"Recipe {r.RowId} at index {index} in category {recipeNotebookList.RowId}");
                 if (r.RowId == recipe.RowId || r.RowId == 4294967295)
@@ -93,16 +106,17 @@ namespace WachuMakeyMaking.Utils
                 }
             }
 
-            var noteBookDivisionId = recipe.RecipeNotebookList.RowId != 0 && recipe.RecipeNotebookList.IsValid
-                ? (recipe.RecipeNotebookList.RowId - 1000) / 8 + 1000
-                : ((uint)recipe.RecipeLevelTable.Value.ClassJobLevel - 1) / 5;
+            var noteBookDivisionId =
+                recipe.RecipeNotebookList.RowId != 0 && recipe.RecipeNotebookList.IsValid
+                    ? (recipe.RecipeNotebookList.RowId - 1000) / 8 + 1000
+                    : ((uint)recipe.RecipeLevelTable.Value.ClassJobLevel - 1) / 5;
 
             var categoryPage = noteBookDivisionId < 1000 ? 0 : recipeNotebookList.RowOffset / 8;
 
             unsafe
             {
                 if (AgentRecipeNote.Instance()->SelectedRecipeIndex == indexInPage)
-                    if(AgentRecipeNote.Instance()->SelectedRecipeCategory == noteBookDivisionId)
+                    if (AgentRecipeNote.Instance()->SelectedRecipeCategory == noteBookDivisionId)
                         if (AgentRecipeNote.Instance()->SelectedRecipeCategoryPage == categoryPage)
                             if (AgentRecipeNote.Instance()->SelectedCraftType == recipe.CraftType.RowId)
                                 return; // Already open to the right recipe, no need to do anything)
@@ -110,7 +124,6 @@ namespace WachuMakeyMaking.Utils
                 RaptureGearsetModule.Instance()->EquipGearset(matchingGearSets.First().GearSetId);
                 AgentRecipeNote.Instance()->OpenRecipeByRecipeId(recipeId);
             }
-
         }
 
         public static List<(int GearSetId, int JobId)> EnumerateGearSets()
@@ -123,7 +136,10 @@ namespace WachuMakeyMaking.Utils
                 foreach (ref var gearset in gearsetModule->Entries)
                 {
                     i++;
-                    if (!gearset.Flags.HasFlag(RaptureGearsetModule.GearsetFlag.Exists) || gearset.Flags.HasFlag(RaptureGearsetModule.GearsetFlag.MainHandMissing))
+                    if (
+                        !gearset.Flags.HasFlag(RaptureGearsetModule.GearsetFlag.Exists)
+                        || gearset.Flags.HasFlag(RaptureGearsetModule.GearsetFlag.MainHandMissing)
+                    )
                         continue;
                     gearSetJobs.Add((i, gearset.ClassJob - 8));
                 }

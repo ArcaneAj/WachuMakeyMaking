@@ -49,8 +49,13 @@ public sealed class UniversalisService : IDisposable
         for (var i = 0; i < MaxRetries; i++)
         {
             try
-            {   
-                (newResults, idsArray) = await GetDataForWorldAsync(homeWorldId, idsArray, onIterationUpdate, cancellationToken);
+            {
+                (newResults, idsArray) = await GetDataForWorldAsync(
+                    homeWorldId,
+                    idsArray,
+                    onIterationUpdate,
+                    cancellationToken
+                );
                 results.AddRange(newResults);
                 break;
             }
@@ -106,13 +111,19 @@ public sealed class UniversalisService : IDisposable
                 failed.AddRange(json.failedItems);
             }
 
-            onIterationUpdate($"Fetching market prices... {aggregatedResults.Count} complete, {failed.Count} failed, {idsArray.Count - aggregatedResults.Count - failed.Count} remaining");
+            onIterationUpdate(
+                $"Fetching market prices... {aggregatedResults.Count} complete, {failed.Count} failed, {idsArray.Count - aggregatedResults.Count - failed.Count} remaining"
+            );
         }
 
         return (aggregatedResults, failed);
     }
 
-    private async Task<AggregatedMarketBoardResult?> FetchChunk(uint[] chunk, uint homeWorldId, CancellationToken cancellationToken = default)
+    private async Task<AggregatedMarketBoardResult?> FetchChunk(
+        uint[] chunk,
+        uint homeWorldId,
+        CancellationToken cancellationToken = default
+    )
     {
         var ids = string.Join(',', chunk);
 
@@ -124,7 +135,9 @@ public sealed class UniversalisService : IDisposable
 
         if (response.StatusCode != HttpStatusCode.OK)
         {
-            Plugin.Log.Warning($"Universalis returned status {homeWorldId} {response.StatusCode} {response.ReasonPhrase} {await response.Content.ReadAsStringAsync(cancellationToken)} for ids: {ids}");
+            Plugin.Log.Warning(
+                $"Universalis returned status {homeWorldId} {response.StatusCode} {response.ReasonPhrase} {await response.Content.ReadAsStringAsync(cancellationToken)} for ids: {ids}"
+            );
             return new AggregatedMarketBoardResult { results = [], failedItems = [.. chunk] };
         }
 

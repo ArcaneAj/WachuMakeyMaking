@@ -1,11 +1,11 @@
-using Dalamud.Bindings.ImGui;
-using Dalamud.Game.Inventory;
-using Dalamud.Game.Inventory.InventoryEventArgTypes;
-using Dalamud.Interface.Windowing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using Dalamud.Bindings.ImGui;
+using Dalamud.Game.Inventory;
+using Dalamud.Game.Inventory.InventoryEventArgTypes;
+using Dalamud.Interface.Windowing;
 using WachuMakeyMaking.Services;
 
 namespace WachuMakeyMaking.Windows;
@@ -14,7 +14,6 @@ public sealed class MainWindow : Window, IDisposable
 {
     private readonly TabService tabService;
     private readonly InventoryService inventoryService;
-
 
     public MainWindow(TabService tabService, InventoryService inventoryService)
         : base($"{Plugin.Name}?##{Plugin.Name}ID", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
@@ -40,7 +39,13 @@ public sealed class MainWindow : Window, IDisposable
 
     private void OnInventoryChanged(IReadOnlyCollection<InventoryEventArgs> events)
     {
-        if (events.Any(e => e.Type == GameInventoryEvent.Added || e.Type == GameInventoryEvent.Removed || e.Type == GameInventoryEvent.Changed))
+        if (
+            events.Any(e =>
+                e.Type == GameInventoryEvent.Added
+                || e.Type == GameInventoryEvent.Removed
+                || e.Type == GameInventoryEvent.Changed
+            )
+        )
         {
             this.inventoryService.Init();
         }

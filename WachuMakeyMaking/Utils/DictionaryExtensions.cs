@@ -4,9 +4,8 @@ namespace WachuMakeyMaking.Utils
 {
     public static class DictionaryExtensions
     {
-        public static void MergeUnion<K, V>(
-            this Dictionary<K, HashSet<V>> target,
-            Dictionary<K, HashSet<V>> source) where K : notnull
+        public static void MergeUnion<K, V>(this Dictionary<K, HashSet<V>> target, Dictionary<K, HashSet<V>> source)
+            where K : notnull
         {
             foreach (var (key, set) in source)
             {

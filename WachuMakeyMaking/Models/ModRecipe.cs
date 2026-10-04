@@ -10,7 +10,8 @@ namespace WachuMakeyMaking.Models
         byte classJobLevel,
         uint classJobId,
         uint book,
-        uint noteBookDivisionId) { }
+        uint noteBookDivisionId
+    ) { }
 
     public record ModRecipeWithValue(ModRecipe recipe, double Value, ModItem Currency)
         : ModRecipe(

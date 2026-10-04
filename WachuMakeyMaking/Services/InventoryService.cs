@@ -1,11 +1,11 @@
-using Dalamud.Game.Inventory;
-using FFXIVClientStructs.FFXIV.Client.Game;
-using Lumina.Excel;
-using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using Dalamud.Game.Inventory;
+using FFXIVClientStructs.FFXIV.Client.Game;
+using Lumina.Excel;
+using Lumina.Excel.Sheets;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Utils;
 
@@ -45,17 +45,22 @@ namespace WachuMakeyMaking.Services
             this.inventory = GetInventory();
             this.saddleBag = GetSaddleBag();
             this.retainerTimer?.Dispose();
-            this.retainerTimer = new Timer(_ =>
-            {
-                try
+            this.retainerTimer = new Timer(
+                _ =>
                 {
-                    CheckActiveRetainer();
-                }
-                catch (Exception ex)
-                {
-                    Plugin.Log.Error($"CheckActiveRetainer timer error: {ex}");
-                }
-            }, null, 0, TimeSpan.FromSeconds(CHECK_PERIOD_SECONDS).Milliseconds);
+                    try
+                    {
+                        CheckActiveRetainer();
+                    }
+                    catch (Exception ex)
+                    {
+                        Plugin.Log.Error($"CheckActiveRetainer timer error: {ex}");
+                    }
+                },
+                null,
+                0,
+                TimeSpan.FromSeconds(CHECK_PERIOD_SECONDS).Milliseconds
+            );
 
             this.ItemSources = this.GetPopulatedItemSources().ToDictionary(x => x, x => true);
             this.EmitInitCompleteEvent();
@@ -92,39 +97,42 @@ namespace WachuMakeyMaking.Services
                     //uint gil = retainer.Gil;
                     //byte marketItemCount = retainer.MarketItemCount;
 
-                    this.retainerCache[name] = [
-                        ..GetItemsFromInventory(GameInventoryType.RetainerCrystals),
-                        ..GetItemsFromInventory(GameInventoryType.RetainerPage1),
-                        ..GetItemsFromInventory(GameInventoryType.RetainerPage2),
-                        ..GetItemsFromInventory(GameInventoryType.RetainerPage3),
-                        ..GetItemsFromInventory(GameInventoryType.RetainerPage4),
-                        ..GetItemsFromInventory(GameInventoryType.RetainerPage5),
-                        ..GetItemsFromInventory(GameInventoryType.RetainerPage6),
-                        ..GetItemsFromInventory(GameInventoryType.RetainerPage7)
-                        ];
+                    this.retainerCache[name] =
+                    [
+                        .. GetItemsFromInventory(GameInventoryType.RetainerCrystals),
+                        .. GetItemsFromInventory(GameInventoryType.RetainerPage1),
+                        .. GetItemsFromInventory(GameInventoryType.RetainerPage2),
+                        .. GetItemsFromInventory(GameInventoryType.RetainerPage3),
+                        .. GetItemsFromInventory(GameInventoryType.RetainerPage4),
+                        .. GetItemsFromInventory(GameInventoryType.RetainerPage5),
+                        .. GetItemsFromInventory(GameInventoryType.RetainerPage6),
+                        .. GetItemsFromInventory(GameInventoryType.RetainerPage7),
+                    ];
                 }
             }
         }
 
         private ModItemStack[] GetSaddleBag()
         {
-            return [
-                ..GetItemsFromInventory(GameInventoryType.SaddleBag1),
-                ..GetItemsFromInventory(GameInventoryType.SaddleBag2),
-                ..GetItemsFromInventory(GameInventoryType.PremiumSaddleBag1),
-                ..GetItemsFromInventory(GameInventoryType.PremiumSaddleBag2)
-                ];
+            return
+            [
+                .. GetItemsFromInventory(GameInventoryType.SaddleBag1),
+                .. GetItemsFromInventory(GameInventoryType.SaddleBag2),
+                .. GetItemsFromInventory(GameInventoryType.PremiumSaddleBag1),
+                .. GetItemsFromInventory(GameInventoryType.PremiumSaddleBag2),
+            ];
         }
 
         private ModItemStack[] GetInventory()
         {
-            return [
-                ..GetItemsFromInventory(GameInventoryType.Crystals),
-                ..GetItemsFromInventory(GameInventoryType.Inventory1),
-                ..GetItemsFromInventory(GameInventoryType.Inventory2),
-                ..GetItemsFromInventory(GameInventoryType.Inventory3),
-                ..GetItemsFromInventory(GameInventoryType.Inventory4)
-                ];
+            return
+            [
+                .. GetItemsFromInventory(GameInventoryType.Crystals),
+                .. GetItemsFromInventory(GameInventoryType.Inventory1),
+                .. GetItemsFromInventory(GameInventoryType.Inventory2),
+                .. GetItemsFromInventory(GameInventoryType.Inventory3),
+                .. GetItemsFromInventory(GameInventoryType.Inventory4),
+            ];
         }
 
         public ModItemStack[] GetCrystals()
@@ -151,13 +159,14 @@ namespace WachuMakeyMaking.Services
                 })
                 .ToArray();
 
-
             return consolidatedItems;
         }
 
         public ModItemStack[] GetOverriddenItems()
         {
-            var manualItems = GetOwnedItems().Concat(this.manualIngredients).Select(x => new ModItemStack(x.Item, x.Id, this.manualQuantities.GetValueOrDefault(x.Id, x.Quantity)));
+            var manualItems = GetOwnedItems()
+                .Concat(this.manualIngredients)
+                .Select(x => new ModItemStack(x.Item, x.Id, this.manualQuantities.GetValueOrDefault(x.Id, x.Quantity)));
             return [.. manualItems];
         }
 
@@ -192,9 +201,15 @@ namespace WachuMakeyMaking.Services
 
         private ModItemStack[] GetItemsFromInventory(GameInventoryType inventory)
         {
-            return Plugin.GameInventory.GetInventoryItems(inventory).ToArray()
+            return Plugin
+                .GameInventory.GetInventoryItems(inventory)
+                .ToArray()
                 .Where(x => x.ItemId != 0)
-                .SelectMany(i => this.itemSheet.TryGetRow(i.BaseItemId, out var row) ? [new ModItemStack(row.ToMod(), i.BaseItemId, i.Quantity)] : Array.Empty<ModItemStack>())
+                .SelectMany(i =>
+                    this.itemSheet.TryGetRow(i.BaseItemId, out var row)
+                        ? [new ModItemStack(row.ToMod(), i.BaseItemId, i.Quantity)]
+                        : Array.Empty<ModItemStack>()
+                )
                 .ToArray();
         }
 

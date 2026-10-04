@@ -6,18 +6,22 @@ namespace WachuMakeyMaking.Utils
         {
             Plugin.Log.Info(val);
         }
+
         public static void Log(this int val)
         {
             Plugin.Log.Info($"{val}");
         }
+
         public static void Log(this uint val)
         {
             Plugin.Log.Info($"{val}");
         }
+
         public static void Log(this float val)
         {
             Plugin.Log.Info($"{val}");
         }
+
         public static void Log(this bool val)
         {
             Plugin.Log.Info($"{val}");

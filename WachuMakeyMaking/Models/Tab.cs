@@ -4,6 +4,6 @@ namespace WachuMakeyMaking.Models
     {
         Ingredients,
         Recipes,
-        Results
+        Results,
     }
 }

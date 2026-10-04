@@ -1,12 +1,12 @@
-using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using Lumina.Excel;
-using Lumina.Excel.Sheets;
-using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using Lumina.Excel;
+using Lumina.Excel.Sheets;
+using Microsoft.Extensions.Caching.Memory;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Utils;
 
@@ -55,7 +55,8 @@ namespace WachuMakeyMaking.Services
             {
                 var recipes = GetAllPossibleCrafts([.. selectedIngredients.Select(x => x.Item)]);
                 // Get all the prices for the recipes we can make, and the ingredients we have, and cache them in memory
-                var itemsToPrice = recipes.Select(x => x.Item)
+                var itemsToPrice = recipes
+                    .Select(x => x.Item)
                     .Concat(FeatureFlags.AllowSellingIngredients ? selectedIngredients.Select(x => x.Item) : [])
                     .ToHashSet();
 
@@ -118,10 +119,8 @@ namespace WachuMakeyMaking.Services
                 this.PricesByItemId = pricesByItemId;
                 this.CraftCostByItemId = pricesByItemId.ToDictionary(
                     x => x.Key,
-                    x => new ModItemWithValue(
-                        x.Value.Item,
-                        craftedPrices.GetValueOrDefault(x.Key, 0),
-                        this.gil));
+                    x => new ModItemWithValue(x.Value.Item, craftedPrices.GetValueOrDefault(x.Key, 0), this.gil)
+                );
 
                 // Make dummy entries for the ingredients themselves so we can compare them to the recipes we can make.
                 // They are just recipes with themselves as the ingredient and no other ingredients, and the value is just the price of the item itself.
@@ -160,9 +159,7 @@ namespace WachuMakeyMaking.Services
                 if (itemLookup.TryGetValue(itemId, out var item))
                 {
                     // Check if this item is collectable
-                    var (isCollectable, scripType, scripValue) = this.collectableService.GetCollectableInfo(
-                        item
-                    );
+                    var (isCollectable, scripType, scripValue) = this.collectableService.GetCollectableInfo(item);
                     if (isCollectable)
                     {
                         var modItem = new ModItemWithValue(item, scripValue, scripType);
@@ -234,13 +231,17 @@ namespace WachuMakeyMaking.Services
                 })
                 .ToList();
 
-            return [.. collectablesWithValues, .. cachedItemsWithValues, .. uncachedItemsWithValues, .. storeItemsWithValues];
+            return
+            [
+                .. collectablesWithValues,
+                .. cachedItemsWithValues,
+                .. uncachedItemsWithValues,
+                .. storeItemsWithValues,
+            ];
         }
 
         // We need to check the prices each time we update for everything in the total list above, but the universalis service should have a timed cache
         // and only fetch the values not in the cache
-
-
 
         private List<ModRecipe> GetAllPossibleCrafts(List<ModItem> items)
         {
@@ -276,15 +277,19 @@ namespace WachuMakeyMaking.Services
 
         public List<ModRecipe> GetRecipes()
         {
-            modRecipes ??= [.. Plugin
-                .DataManager.GetExcelSheet<Recipe>()
-                .Where(x => x.ItemResult.Value.Name != string.Empty)
-                .Select(GetRecipeIngredients)];
+            modRecipes ??=
+            [
+                .. Plugin
+                    .DataManager.GetExcelSheet<Recipe>()
+                    .Where(x => x.ItemResult.Value.Name != string.Empty)
+                    .Select(GetRecipeIngredients),
+            ];
 
             return this.modRecipes;
         }
 
         private readonly Dictionary<ModItem, List<ModRecipe>> modRecipesByOutputItem = [];
+
         public List<ModRecipe> GetRecipesByOutput(ModItem item)
         {
             if (!modRecipesByOutputItem.TryGetValue(item, out var cachedRecipes))
@@ -298,6 +303,7 @@ namespace WachuMakeyMaking.Services
         }
 
         private readonly Dictionary<ModItem, List<ModRecipe>> ingredientCache = [];
+
         public List<ModRecipe> FindRecipesWithIngredient(ModItem item)
         {
             if (!ingredientCache.TryGetValue(item, out var cachedRecipes))
@@ -380,10 +386,10 @@ namespace WachuMakeyMaking.Services
             var recipeLevelTable = Plugin.DataManager.GetExcelSheet<RecipeLevelTable>();
             var recipeLevel = recipeLevelTable.GetRow(recipe.RecipeLevelTable.RowId);
 
-
-            var noteBookDivisionId = recipe.RecipeNotebookList.RowId != 0 && recipe.RecipeNotebookList.IsValid
-                ? (recipe.RecipeNotebookList.RowId - 1000) / 8 + 1000
-                : ((uint)recipe.RecipeLevelTable.Value.ClassJobLevel - 1) / 5;
+            var noteBookDivisionId =
+                recipe.RecipeNotebookList.RowId != 0 && recipe.RecipeNotebookList.IsValid
+                    ? (recipe.RecipeNotebookList.RowId - 1000) / 8 + 1000
+                    : ((uint)recipe.RecipeLevelTable.Value.ClassJobLevel - 1) / 5;
 
             // offset of 8 is because 0-7 are the base combat classes in the ClassJob sheet we use later, but craft type starts at 0 since it only contains crafting classes
             return new ModRecipe(

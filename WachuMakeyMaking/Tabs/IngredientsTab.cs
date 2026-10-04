@@ -1,10 +1,10 @@
-using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.Utility;
-using Dalamud.Interface.Utility.Raii;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility.Raii;
 using WachuMakeyMaking.Services;
 using WachuMakeyMaking.Utils;
 
@@ -107,8 +107,14 @@ namespace WachuMakeyMaking.Tabs
 
                         // Position the small horizontal bar inside the checkbox square. FramePadding.X is
                         // used to approximate the left edge of the checkbox box inside the item rectangle.
-                        var barLeft = new Vector2(itemMin.X + style.FramePadding.X, (itemMin.Y + itemMax.Y) / 2f - 1.0f);
-                        var barRight = new Vector2(itemMin.X + style.FramePadding.X + 15.0f, (itemMin.Y + itemMax.Y) / 2f + 1.0f);
+                        var barLeft = new Vector2(
+                            itemMin.X + style.FramePadding.X,
+                            (itemMin.Y + itemMax.Y) / 2f - 1.0f
+                        );
+                        var barRight = new Vector2(
+                            itemMin.X + style.FramePadding.X + 15.0f,
+                            (itemMin.Y + itemMax.Y) / 2f + 1.0f
+                        );
                         var col = ImGui.GetColorU32(ImGuiCol.Text);
                         drawList.AddRectFilled(barLeft, barRight, col, 1.0f);
                     }
@@ -150,12 +156,44 @@ namespace WachuMakeyMaking.Tabs
                 baseX = ImGui.GetCursorPosX() + 25f;
 
                 // Add the two manual checkboxes for "Only Equippable" and "Only Unequippable"
-                manualInsertions = UiUtils.DefineManualCheckbox("filters", baseX, manualInsertions, "Only Equippable", ref this.model.onlyEquippable, ref this.model.onlyUnequippable, this.model.ScheduleUpdate);
-                manualInsertions = UiUtils.DefineManualCheckbox("filters", baseX, manualInsertions, "Only Unequippable", ref this.model.onlyUnequippable, ref this.model.onlyEquippable, this.model.ScheduleUpdate);
+                manualInsertions = UiUtils.DefineManualCheckbox(
+                    "filters",
+                    baseX,
+                    manualInsertions,
+                    "Only Equippable",
+                    ref this.model.onlyEquippable,
+                    ref this.model.onlyUnequippable,
+                    this.model.ScheduleUpdate
+                );
+                manualInsertions = UiUtils.DefineManualCheckbox(
+                    "filters",
+                    baseX,
+                    manualInsertions,
+                    "Only Unequippable",
+                    ref this.model.onlyUnequippable,
+                    ref this.model.onlyEquippable,
+                    this.model.ScheduleUpdate
+                );
 
                 // Add the two manual checkboxes for "Only Crafted" and "Only Raw"
-                manualInsertions = UiUtils.DefineManualCheckbox("filters", baseX, manualInsertions, "Only Crafted", ref this.model.onlyCrafted, ref this.model.onlyRaw, this.model.ScheduleUpdate);
-                manualInsertions = UiUtils.DefineManualCheckbox("filters", baseX, manualInsertions, "Only Raw", ref this.model.onlyRaw, ref this.model.onlyCrafted, this.model.ScheduleUpdate);
+                manualInsertions = UiUtils.DefineManualCheckbox(
+                    "filters",
+                    baseX,
+                    manualInsertions,
+                    "Only Crafted",
+                    ref this.model.onlyCrafted,
+                    ref this.model.onlyRaw,
+                    this.model.ScheduleUpdate
+                );
+                manualInsertions = UiUtils.DefineManualCheckbox(
+                    "filters",
+                    baseX,
+                    manualInsertions,
+                    "Only Raw",
+                    ref this.model.onlyRaw,
+                    ref this.model.onlyCrafted,
+                    this.model.ScheduleUpdate
+                );
             }
 
             ImGuiHelpers.ScaledDummy(5.0f);
@@ -168,12 +206,14 @@ namespace WachuMakeyMaking.Tabs
             ImGui.SetCursorPosX(filterOffsetX);
             ImGui.SetNextItemWidth(250.0f);
             var ingredientAddFilter = this.model.IngredientAddFilter;
-            if (ImGui.InputText("##resource_filter", ref ingredientAddFilter, 256)) {
+            if (ImGui.InputText("##resource_filter", ref ingredientAddFilter, 256))
+            {
                 this.model.SetIngredientAddFilter(ingredientAddFilter);
             }
 
             // Current display name for combo (from filtered list)
-            var currentName = this.model.FilteredCandidates.Count > 0 ? this.model.FilteredCandidates[0].Name : "Select...";
+            var currentName =
+                this.model.FilteredCandidates.Count > 0 ? this.model.FilteredCandidates[0].Name : "Select...";
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(250.0f);
@@ -219,7 +259,10 @@ namespace WachuMakeyMaking.Tabs
             }
 
             // Current display name for combo (from filtered list)
-            currentName = this.model.FilteredCraftableCandidates.Count > 0 ? this.model.FilteredCraftableCandidates[0].Name : "Select...";
+            currentName =
+                this.model.FilteredCraftableCandidates.Count > 0
+                    ? this.model.FilteredCraftableCandidates[0].Name
+                    : "Select...";
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(250.0f);
@@ -234,8 +277,14 @@ namespace WachuMakeyMaking.Tabs
                     var name = this.model.FilteredCraftableCandidates[i].Name;
                     if (ImGui.Selectable(name, i == 0))
                     {
-                        var chosen = this.model.FilteredCraftableCandidates[Math.Max(0, Math.Min(i, this.model.FilteredCraftableCandidates.Count - 1))];
-                        var ingredients = this.recipeService.GetRecipesByOutput(chosen).FirstOrDefault()?.Ingredients.Keys.Where(x => !this.model.DisplayItems.Any(y => y.Item.RowId == x.RowId)).ToList();
+                        var chosen = this.model.FilteredCraftableCandidates[
+                            Math.Max(0, Math.Min(i, this.model.FilteredCraftableCandidates.Count - 1))
+                        ];
+                        var ingredients = this
+                            .recipeService.GetRecipesByOutput(chosen)
+                            .FirstOrDefault()
+                            ?.Ingredients.Keys.Where(x => !this.model.DisplayItems.Any(y => y.Item.RowId == x.RowId))
+                            .ToList();
 
                         if (ingredients == null || ingredients.Count == 0)
                         {
@@ -263,7 +312,9 @@ namespace WachuMakeyMaking.Tabs
 
             // Prepare toggle state / counts used by header checkbox
             var totalResources = this.model.DisplayItems!.Length;
-            var selectedCount = this.model.DisplayItems.Count(r => this.model.IngredientSelections.GetValueOrDefault(r.Id, false));
+            var selectedCount = this.model.DisplayItems.Count(r =>
+                this.model.IngredientSelections.GetValueOrDefault(r.Id, false)
+            );
             var allSelected = selectedCount == totalResources && totalResources > 0;
             var someSelected = selectedCount > 0 && selectedCount < totalResources;
             var noneSelected = selectedCount == 0;
