@@ -55,7 +55,9 @@ namespace WachuMakeyMaking.Services
             {
                 var recipes = GetAllPossibleCrafts([.. selectedIngredients.Select(x => x.Item)]);
                 // Get all the prices for the recipes we can make, and the ingredients we have, and cache them in memory
-                var itemsToPrice = recipes.Select(x => x.Item).Concat(selectedIngredients.Select(x => x.Item)).ToHashSet();
+                var itemsToPrice = recipes.Select(x => x.Item)
+                    .Concat(FeatureFlags.AllowSellingIngredients ? selectedIngredients.Select(x => x.Item) : [])
+                    .ToHashSet();
 
                 var prices = await GetPricesAsync(itemsToPrice);
 
@@ -72,21 +74,6 @@ namespace WachuMakeyMaking.Services
                 var craftedPrices = new Dictionary<uint, double>();
 
                 var itemSet = new HashSet<ModItem>(selectedIngredients.Select(x => x.Item));
-
-                var recipesWithValues = itemSet.Select(x =>
-                new ModRecipeWithValue(
-                    new ModRecipe(
-                        uint.MaxValue,
-                        x,
-                        1,
-                        new Dictionary<ModItem, byte> { [x] = 1 },
-                        byte.MaxValue,
-                        uint.MaxValue,
-                        uint.MaxValue,
-                        uint.MaxValue),
-                    marketPrices[x.RowId],
-                    this.gil))
-                    .ToList();
 
                 double GetCheapestCost(uint itemId)
                 {
@@ -127,6 +114,11 @@ namespace WachuMakeyMaking.Services
                     itemSet.UnionWith(recipeItems);
                 }
 
+
+                foreach (var recipe in pricesByItemId)
+                {
+                    Plugin.Log.Info($"Found recipe: {recipe.Value.Item.Name} ({recipe.Value.Item.RowId})");
+                }
                 this.SelectedIngredients = selectedIngredients;
                 this.PricesByItemId = pricesByItemId;
                 this.CraftCostByItemId = pricesByItemId.ToDictionary(

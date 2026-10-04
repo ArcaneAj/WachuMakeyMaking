@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using WachuMakeyMaking.Models;
+using WachuMakeyMaking.Utils;
 
 namespace WachuMakeyMaking.Services
 {
@@ -159,9 +160,12 @@ namespace WachuMakeyMaking.Services
                     }
                     else
                     {
-                        // If the wiggled output has no service recipes, add a synthetic self-recipe so it can be selected.
-                        var synthetic = new ModRecipe(0, output.Item, 1, new Dictionary<ModItem, byte> { [output.Item] = 1 }, 0, 0, 0, 0);
-                        recipes.Add(new ModRecipeWithValue(synthetic, value, currency));
+                        if (FeatureFlags.AllowSellingIngredients)
+                        {
+                            // If the wiggled output has no service recipes, add a synthetic self-recipe so it can be selected.
+                            var synthetic = new ModRecipe(0, output.Item, 1, new Dictionary<ModItem, byte> { [output.Item] = 1 }, 0, 0, 0, 0);
+                            recipes.Add(new ModRecipeWithValue(synthetic, value, currency));
+                        }
                     }
                 }
 
