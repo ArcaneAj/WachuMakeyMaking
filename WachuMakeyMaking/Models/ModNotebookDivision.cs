@@ -2,7 +2,7 @@ using Lumina.Excel.Sheets;
 
 namespace WachuMakeyMaking.Models
 {
-    public class ModNotebookDivision
+    public class ModNotebookDivision(NotebookDivision? division, string? name = null)
     {
         public string Name
         {
@@ -17,13 +17,7 @@ namespace WachuMakeyMaking.Models
             get => division;
         }
 
-        private string? name;
-        private NotebookDivision? division;
-
-        public ModNotebookDivision(NotebookDivision? division, string? name = null)
-        {
-            this.division = division;
-            this.name = name;
-        }
+        private readonly string? name = name;
+        private readonly NotebookDivision? division = division;
     }
 }

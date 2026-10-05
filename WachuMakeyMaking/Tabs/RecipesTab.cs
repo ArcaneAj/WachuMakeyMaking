@@ -74,7 +74,7 @@ namespace WachuMakeyMaking.Tabs
 
             ImGui.SameLine();
 
-            ImGui.Text($"{this.model.RecipeSelections.Count} craftable recipes found ({selectedCount} selected)");
+            ImGui.Text($"{this.model.Recipes.Count} craftable recipes found ({selectedCount} selected)");
 
             if (!string.IsNullOrEmpty(this.recipeService.UniversalisMessage))
             {
@@ -82,7 +82,7 @@ namespace WachuMakeyMaking.Tabs
             }
 
             ImGuiHelpers.ScaledDummy(10.0f);
-            if (this.model.RecipeSelections.Count > 0)
+            if (this.model.Recipes.Count > 0)
             {
                 var outputs = this.model.Recipes;
                 var currencyGrouping = outputs.GroupBy(x => x.Currency.RowId).Where(x => x.Key != 1);
@@ -195,7 +195,7 @@ namespace WachuMakeyMaking.Tabs
                         ImGui.Text("Recipe");
 
                         // Rows (table body will scroll; header is frozen)
-                        foreach (var output in outputs.OrderByDescending(r => r.RowId))
+                        foreach (var output in outputs.OrderByDescending(r => r.Item.RowId))
                         {
                             var outputName = output.Item.Name.ToString();
                             var isSelected = this.model.RecipeSelections.GetValueOrDefault(output.Item, false);
@@ -230,12 +230,15 @@ namespace WachuMakeyMaking.Tabs
                             var rowHeight = Math.Max(ImGui.GetFrameHeightWithSpacing(), iconHeight);
 
                             // Create the invisible button that covers the whole cell
-                            ImGui.InvisibleButton($"cell_btn_recipe_{output.RowId}", new Vector2(fullWidth, rowHeight));
+                            ImGui.InvisibleButton(
+                                $"cell_btn_recipe_{output.Item.RowId}",
+                                new Vector2(fullWidth, rowHeight)
+                            );
                             if (ImGui.IsItemClicked())
                             {
-                                var recipe = this
-                                    .recipeService.GetRecipesByOutput(output.Item)
-                                    .FirstOrDefault(r => r.RowId == output.RowId);
+                                var recipe = RecipeService
+                                    .GetRecipesByOutput(output.Item)
+                                    .FirstOrDefault(r => r.RowId == output.Item.RowId);
                                 if (recipe != null)
                                 {
                                     try
@@ -245,7 +248,7 @@ namespace WachuMakeyMaking.Tabs
                                     catch (Exception ex)
                                     {
                                         Plugin.Log.Error(
-                                            $"Failed to open crafting log for recipe {output.RowId}: {ex.Message}"
+                                            $"Failed to open crafting log for recipe {output.Item.RowId}: {ex.Message}"
                                         );
                                     }
                                 }

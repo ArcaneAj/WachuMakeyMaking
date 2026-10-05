@@ -15,7 +15,7 @@ namespace WachuMakeyMaking.Tests
             recipes[item] = recs;
         }
 
-        public List<ModRecipe> GetRecipesByOutput(ModItem item)
+        public List<ModRecipe> GetRecipesByOutputTestable(ModItem item)
         {
             if (recipes.TryGetValue(item, out var r))
                 return r;

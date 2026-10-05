@@ -98,7 +98,6 @@ namespace WachuMakeyMaking.Utils
             var indexInPage = -1;
             foreach (var (r, index) in recipeNotebookList.Recipe.Select((x, i) => (x, i)))
             {
-                Plugin.Log.Info($"Recipe {r.RowId} at index {index} in category {recipeNotebookList.RowId}");
                 if (r.RowId == recipe.RowId || r.RowId == 4294967295)
                 {
                     indexInPage = index;

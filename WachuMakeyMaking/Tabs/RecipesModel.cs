@@ -1,8 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using FFXIVClientStructs.FFXIV.Common.Lua;
 using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
 
@@ -21,9 +19,6 @@ namespace WachuMakeyMaking.Tabs
         // Track currency values (keyed by currency RowId)
         public Dictionary<uint, float> CurrencyValues { get; private set; } = [];
 
-        // Flags
-        public bool UseProfitOverride { get; private set; } = false;
-
         public RecipesModel(RecipeService recipeService)
         {
             this.recipeService = recipeService;
@@ -35,13 +30,18 @@ namespace WachuMakeyMaking.Tabs
             // From the recipe service get all recipes that use the selected ingredients (pushed to it by the ingredients tab)
             // as well as the prices from universalis that should be cached in memory
             var pricesByItemId = this.recipeService.PricesByItemId;
-            var craftCostByItemId = this.recipeService.CraftCostByItemId;
 
             // Add all the recipes to the selection dictionary if they aren't already there, defaulting to false (not selected)
             foreach (var item in pricesByItemId.Values)
             {
-                this.RecipeSelections.TryAdd(item, false);
+                this.RecipeSelections.TryAdd(item.Item, false);
             }
+
+            // We need to remove selections that have been filtered out downstream
+            var availableIds = pricesByItemId.Keys.ToHashSet();
+            this.RecipeSelections = this
+                .RecipeSelections.Where(x => availableIds.Contains(x.Key.RowId))
+                .ToDictionary(x => x.Key, x => x.Value);
 
             // Apply the manual price overrides
             var baseRecipes = pricesByItemId
@@ -52,17 +52,6 @@ namespace WachuMakeyMaking.Tabs
 
             // Create a list of selected recipes to push to the solver
             var selectedRecipes = baseRecipes.Where(x => this.RecipeSelections.GetValueOrDefault(x.Item, false));
-
-            selectedRecipes = !this.UseProfitOverride
-                ? selectedRecipes
-                : selectedRecipes.Select(x => new ModItemWithValue(
-                    x.Item,
-                    x.Value - (craftCostByItemId.TryGetValue(x.Item.RowId, out var craftCost) ? craftCost.Value : 0),
-                    this.recipeService.PricesByItemId.GetValueOrDefault(
-                        x.Item.RowId,
-                        new ModItemWithValue(x.Item, 0, x.Item)
-                    ).Item
-                ));
 
             // Create an index-matched list with wiggled values to actually pass, and keep the original for the lookup after
             var wiggledRecipes = selectedRecipes

@@ -1,10 +1,12 @@
-using System;
+using System.Collections.Generic;
+using System.Linq;
 using Dalamud.Game.Command;
+using Dalamud.Game.Inventory;
+using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using WachuMakeyMaking.Models;
 using WachuMakeyMaking.Services;
 using WachuMakeyMaking.Utils;
 using WachuMakeyMaking.Windows;
@@ -61,7 +63,7 @@ public sealed class Plugin : IDalamudPlugin
         RecipeService = new RecipeService(UniversalisService, CollectableService);
         SolverService = new SolverService(l => Log.Info(l), l => Log.Error(l), RecipeService);
         TabService = new TabService(RecipeService, InventoryService, SolverService);
-        MainWindow = new MainWindow(TabService, InventoryService);
+        MainWindow = new MainWindow(TabService);
 
         WindowSystem.AddWindow(MainWindow);
 
@@ -79,6 +81,7 @@ public sealed class Plugin : IDalamudPlugin
 
         ClientState.Login += OnLogin;
         ClientState.Logout += OnLogout;
+        Plugin.GameInventory.InventoryChanged += OnInventoryChanged;
     }
 
     private void OnLogout(int type, int code)
@@ -95,6 +98,7 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        GameInventory.InventoryChanged -= OnInventoryChanged;
         // Unregister all actions to not leak anything during disposal of plugin
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
@@ -107,6 +111,28 @@ public sealed class Plugin : IDalamudPlugin
         SolverService.Reset();
 
         CommandManager.RemoveHandler(CommandName);
+    }
+
+    private void OnInventoryChanged(IReadOnlyCollection<InventoryEventArgs> events)
+    {
+        foreach (var e in events)
+        {
+            Log.Info($"{e.Type} slot:{e.Item.InventorySlot} itemId: {e.Item.BaseItemId} {e.Item.ContainerType}");
+        }
+        if (
+            events.Any(e =>
+                e.Type == GameInventoryEvent.Added
+                || e.Type == GameInventoryEvent.Removed
+                || e.Type == GameInventoryEvent.Changed
+                || e.Type == GameInventoryEvent.Moved //If we drag from player to retainer this is all that's fired, and it only has the destination's ContainerType
+            )
+        )
+        {
+            InventoryService.Update(
+                [.. events.Select(x => x.Item.ContainerType)],
+                events.Any(e => e.Type == GameInventoryEvent.Moved)
+            );
+        }
     }
 
     private void OnCommand(string command, string args)

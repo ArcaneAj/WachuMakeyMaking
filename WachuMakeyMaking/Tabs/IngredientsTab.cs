@@ -13,16 +13,14 @@ namespace WachuMakeyMaking.Tabs
     public class IngredientsTab
     {
         private readonly IngredientsModel model;
-        private readonly RecipeService recipeService;
         private readonly InventoryService inventoryService;
         private const int TAG_COLS = 4;
         private const float TAG_COL_WIDTH = 200f;
 
         public IngredientsTab(RecipeService recipeService, InventoryService inventoryService)
         {
-            this.recipeService = recipeService;
             this.inventoryService = inventoryService;
-            var recipes = this.recipeService.GetRecipes();
+            var recipes = RecipeService.GetRecipes();
             this.model = new IngredientsModel(inventoryService, recipeService, recipes);
             this.inventoryService.InitCompleteEvent.Subscribe("IngredientsTab", () => this.model.ScheduleUpdate());
         }
@@ -280,8 +278,8 @@ namespace WachuMakeyMaking.Tabs
                         var chosen = this.model.FilteredCraftableCandidates[
                             Math.Max(0, Math.Min(i, this.model.FilteredCraftableCandidates.Count - 1))
                         ];
-                        var ingredients = this
-                            .recipeService.GetRecipesByOutput(chosen)
+                        var ingredients = RecipeService
+                            .GetRecipesByOutput(chosen)
                             .FirstOrDefault()
                             ?.Ingredients.Keys.Where(x => !this.model.DisplayItems.Any(y => y.Item.RowId == x.RowId))
                             .ToList();

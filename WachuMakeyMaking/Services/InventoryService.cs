@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using Dalamud.Game.Inventory;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel;
@@ -13,8 +12,7 @@ namespace WachuMakeyMaking.Services
 {
     public class InventoryService : BaseService
     {
-        private const int CHECK_PERIOD_SECONDS = 1;
-        private readonly ExcelSheet<Item> itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
+        private static readonly ExcelSheet<Item> ItemSheet = Plugin.DataManager.GetExcelSheet<Item>();
         private ModItemStack[] inventory = [];
         private ModItemStack[] saddleBag = [];
         private Dictionary<string, ModItemStack[]> retainerCache = [];
@@ -22,7 +20,6 @@ namespace WachuMakeyMaking.Services
         private Dictionary<uint, int> manualQuantities = [];
         private Dictionary<string, ModItemStack[]> itemsBySourceCache = [];
         public Dictionary<string, bool> ItemSources { get; private set; } = [];
-        private Timer? retainerTimer;
 
         public void Clear()
         {
@@ -30,8 +27,7 @@ namespace WachuMakeyMaking.Services
             this.saddleBag = [];
             this.retainerCache = [];
             this.itemsBySourceCache = [];
-            this.retainerTimer?.Dispose();
-            this.retainerTimer = null;
+            ResetManualOverrides();
         }
 
         public void ResetManualOverrides()
@@ -40,37 +36,40 @@ namespace WachuMakeyMaking.Services
             this.manualQuantities = [];
         }
 
+        public void Update(HashSet<GameInventoryType> inventoriesChanged, bool itemMoved)
+        {
+            this.itemsBySourceCache = [];
+            if (itemMoved || inventoriesChanged.Any(RetainerTypes.Contains))
+                CheckActiveRetainer();
+            if (itemMoved || inventoriesChanged.Any(InventoryTypes.Contains))
+                this.inventory = GetInventory();
+            if (itemMoved || inventoriesChanged.Any(SaddleBagTypes.Contains))
+                this.saddleBag = GetSaddleBag();
+            this.ItemSources = this.GetPopulatedItemSources()
+                .ToDictionary(x => x, x => this.ItemSources.GetValueOrDefault(x, true));
+            this.EmitInitCompleteEvent();
+        }
+
         public void Init()
         {
             this.inventory = GetInventory();
             this.saddleBag = GetSaddleBag();
-            this.retainerTimer?.Dispose();
-            this.retainerTimer = new Timer(
-                _ =>
-                {
-                    try
-                    {
-                        CheckActiveRetainer();
-                    }
-                    catch (Exception ex)
-                    {
-                        Plugin.Log.Error($"CheckActiveRetainer timer error: {ex}");
-                    }
-                },
-                null,
-                0,
-                TimeSpan.FromSeconds(CHECK_PERIOD_SECONDS).Milliseconds
-            );
 
             this.ItemSources = this.GetPopulatedItemSources().ToDictionary(x => x, x => true);
             this.EmitInitCompleteEvent();
         }
 
-        public void Reset()
-        {
-            Clear();
-            Init();
-        }
+        private static readonly HashSet<GameInventoryType> RetainerTypes =
+        [
+            GameInventoryType.RetainerCrystals,
+            GameInventoryType.RetainerPage1,
+            GameInventoryType.RetainerPage2,
+            GameInventoryType.RetainerPage3,
+            GameInventoryType.RetainerPage4,
+            GameInventoryType.RetainerPage5,
+            GameInventoryType.RetainerPage6,
+            GameInventoryType.RetainerPage7,
+        ];
 
         private void CheckActiveRetainer()
         {
@@ -97,55 +96,48 @@ namespace WachuMakeyMaking.Services
                     //uint gil = retainer.Gil;
                     //byte marketItemCount = retainer.MarketItemCount;
 
-                    this.retainerCache[name] =
-                    [
-                        .. GetItemsFromInventory(GameInventoryType.RetainerCrystals),
-                        .. GetItemsFromInventory(GameInventoryType.RetainerPage1),
-                        .. GetItemsFromInventory(GameInventoryType.RetainerPage2),
-                        .. GetItemsFromInventory(GameInventoryType.RetainerPage3),
-                        .. GetItemsFromInventory(GameInventoryType.RetainerPage4),
-                        .. GetItemsFromInventory(GameInventoryType.RetainerPage5),
-                        .. GetItemsFromInventory(GameInventoryType.RetainerPage6),
-                        .. GetItemsFromInventory(GameInventoryType.RetainerPage7),
-                    ];
+                    this.retainerCache[name] = [.. RetainerTypes.SelectMany(GetItemsFromInventory)];
                 }
             }
         }
 
-        private ModItemStack[] GetSaddleBag()
+        private static readonly HashSet<GameInventoryType> SaddleBagTypes =
+        [
+            GameInventoryType.SaddleBag1,
+            GameInventoryType.SaddleBag2,
+            GameInventoryType.PremiumSaddleBag1,
+            GameInventoryType.PremiumSaddleBag2,
+        ];
+
+        private static ModItemStack[] GetSaddleBag()
         {
-            return
-            [
-                .. GetItemsFromInventory(GameInventoryType.SaddleBag1),
-                .. GetItemsFromInventory(GameInventoryType.SaddleBag2),
-                .. GetItemsFromInventory(GameInventoryType.PremiumSaddleBag1),
-                .. GetItemsFromInventory(GameInventoryType.PremiumSaddleBag2),
-            ];
+            return [.. SaddleBagTypes.SelectMany(GetItemsFromInventory)];
         }
 
-        private ModItemStack[] GetInventory()
-        {
-            return
-            [
-                .. GetItemsFromInventory(GameInventoryType.Crystals),
-                .. GetItemsFromInventory(GameInventoryType.Inventory1),
-                .. GetItemsFromInventory(GameInventoryType.Inventory2),
-                .. GetItemsFromInventory(GameInventoryType.Inventory3),
-                .. GetItemsFromInventory(GameInventoryType.Inventory4),
-            ];
-        }
+        private static readonly HashSet<GameInventoryType> InventoryTypes =
+        [
+            GameInventoryType.Crystals,
+            GameInventoryType.Inventory1,
+            GameInventoryType.Inventory2,
+            GameInventoryType.Inventory3,
+            GameInventoryType.Inventory4,
+        ];
 
-        public ModItemStack[] GetCrystals()
+        private static ModItemStack[] GetInventory()
         {
-            return [.. GetItemsFromInventory(GameInventoryType.Crystals)];
+            return [.. InventoryTypes.SelectMany(GetItemsFromInventory)];
         }
 
         public ModItemStack[] GetOwnedItems()
         {
             var itemSourceFilters = this.ItemSources;
-            //Plugin.Log.Info($"GetOwnedItems called with filters: {string.Join(", ", itemSourceFilters.Select(kvp => $"{kvp.Key}: {kvp.Value}"))}");
 
             var itemsBySource = GetItemsBySource();
+
+            foreach (var (filter, value) in itemSourceFilters)
+            {
+                Plugin.Log.Info($"{filter} {value}");
+            }
 
             // Consolidate items with the same ID
             var consolidatedItems = itemsBySource
@@ -158,6 +150,8 @@ namespace WachuMakeyMaking.Services
                     return new ModItemStack(firstStack.Item, firstStack.Id, group.Sum(stack => stack.Quantity));
                 })
                 .ToArray();
+
+            consolidatedItems.Any(x => x.Item.RowId == 5383).Log();
 
             return consolidatedItems;
         }
@@ -199,14 +193,14 @@ namespace WachuMakeyMaking.Services
             return itemBySource;
         }
 
-        private ModItemStack[] GetItemsFromInventory(GameInventoryType inventory)
+        private static ModItemStack[] GetItemsFromInventory(GameInventoryType inventory)
         {
             return Plugin
                 .GameInventory.GetInventoryItems(inventory)
                 .ToArray()
                 .Where(x => x.ItemId != 0)
                 .SelectMany(i =>
-                    this.itemSheet.TryGetRow(i.BaseItemId, out var row)
+                    ItemSheet.TryGetRow(i.BaseItemId, out var row)
                         ? [new ModItemStack(row.ToMod(), i.BaseItemId, i.Quantity)]
                         : Array.Empty<ModItemStack>()
                 )

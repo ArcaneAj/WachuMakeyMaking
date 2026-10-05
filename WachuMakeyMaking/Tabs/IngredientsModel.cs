@@ -23,7 +23,6 @@ namespace WachuMakeyMaking.Tabs
 
         // UI Selections
         public Dictionary<string, Dictionary<ModNotebookDivision, bool>> DivisionTags { get; private set; } = [];
-        public string[] DivisionCategories => [.. this.DivisionTags.Keys];
         public bool onlyEquippable;
         public bool onlyUnequippable;
         public bool onlyCrafted;
@@ -45,11 +44,12 @@ namespace WachuMakeyMaking.Tabs
             this.inventoryService = inventoryService;
             this.recipeService = recipeService;
 
-            this.inventoryService.Reset();
+            this.inventoryService.Clear();
+            this.inventoryService.Init();
 
-            this.ingredientDivisions = SetupIngredientDivisions(recipes, this.recipeService.GetRecipesByOutput);
-            this.ingredientsUsable = SetupUsability(recipes, this.recipeService.GetRecipesByOutput);
-            this.ingredientsEquippable = SetupEquippability(recipes, this.recipeService.GetRecipesByOutput);
+            this.ingredientDivisions = SetupIngredientDivisions(recipes);
+            this.ingredientsUsable = SetupUsability(recipes);
+            this.ingredientsEquippable = SetupEquippability(recipes);
 
             this.DivisionTags = SetupDivisions(recipes);
             this.onlyEquippable = false;
@@ -63,7 +63,7 @@ namespace WachuMakeyMaking.Tabs
 
         protected override async Task UpdateAsync()
         {
-            var allCraftableRecipes = this.recipeService.GetRecipes();
+            var allCraftableRecipes = RecipeService.GetRecipes();
 
             HashSet<ModItem> allIngredients = [.. allCraftableRecipes.SelectMany(x => x.Ingredients.Keys)];
             // Get all the items actually in our bags
@@ -83,6 +83,12 @@ namespace WachuMakeyMaking.Tabs
             {
                 this.IngredientSelections.TryAdd(item.Id, true);
             }
+
+            // We need to remove selections that have been filtered out by the inventorySources
+            var availableIds = this.DisplayItems.Select(x => x.Item.RowId).ToHashSet();
+            this.IngredientSelections = this
+                .IngredientSelections.Where(x => availableIds.Contains(x.Key))
+                .ToDictionary(x => x.Key, x => x.Value);
 
             this.FilteredCandidates = FilterResourceCandidates(allIngredients);
             this.FilteredCraftableCandidates = FilterCraftableCandidates(allIngredients);
@@ -104,24 +110,10 @@ namespace WachuMakeyMaking.Tabs
         //////////////////////////////////////////////////////////////////////
         //// Public fetchers that allow finding information about an item ////
         //////////////////////////////////////////////////////////////////////
-        public bool IngredientIsUsable(ModItem item)
-        {
-            return this.ingredientsUsable.Contains(item);
-        }
-
-        public bool IngredientIsEquippable(ModItem item)
-        {
-            return this.ingredientsEquippable.Contains(item);
-        }
 
         public bool IngredientIsSelected(ModItem item)
         {
             return this.IngredientSelections[item.RowId];
-        }
-
-        public HashSet<uint> GetDivisionsForItem(ModItem item)
-        {
-            return this.ingredientDivisions.GetValueOrDefault(item, []);
         }
 
         ////////////////////////////////////////////////////////////////////////
@@ -193,10 +185,7 @@ namespace WachuMakeyMaking.Tabs
         ///////////////////////
         //// Private utils ////
         ///////////////////////
-        private static HashSet<ModItem> SetupEquippability(
-            IEnumerable<ModRecipe> recipes,
-            Func<ModItem, List<ModRecipe>> getRecipeForItem
-        )
+        private static HashSet<ModItem> SetupEquippability(IEnumerable<ModRecipe> recipes)
         {
             var ingredientsEquippable = new HashSet<ModItem>();
             var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
@@ -220,24 +209,19 @@ namespace WachuMakeyMaking.Tabs
 
             // Recursively include ingredients of those ingredients regardless of their FilterGroup
             var nestedIngredientsToCheck = ingredientsEquippable
-                .SelectMany(getRecipeForItem)
+                .SelectMany(RecipeService.GetRecipesByOutput)
                 .OfType<ModRecipe>()
                 .ToList();
 
             if (nestedIngredientsToCheck.Count > 0)
             {
-                ingredientsEquippable.UnionWith(
-                    SetupEquippabilityRecursive(nestedIngredientsToCheck, getRecipeForItem)
-                );
+                ingredientsEquippable.UnionWith(SetupEquippabilityRecursive(nestedIngredientsToCheck));
             }
 
             return ingredientsEquippable;
         }
 
-        private static HashSet<ModItem> SetupEquippabilityRecursive(
-            IEnumerable<ModRecipe> recipes,
-            Func<ModItem, List<ModRecipe>> getRecipeForItem
-        )
+        private static HashSet<ModItem> SetupEquippabilityRecursive(IEnumerable<ModRecipe> recipes)
         {
             var ingredients = new HashSet<ModItem>();
             foreach (var recipe in recipes)
@@ -248,19 +232,16 @@ namespace WachuMakeyMaking.Tabs
                 }
             }
 
-            var nested = ingredients.SelectMany(getRecipeForItem).OfType<ModRecipe>().ToList();
+            var nested = ingredients.SelectMany(RecipeService.GetRecipesByOutput).OfType<ModRecipe>().ToList();
             if (nested.Count > 0)
             {
-                ingredients.UnionWith(SetupEquippabilityRecursive(nested, getRecipeForItem));
+                ingredients.UnionWith(SetupEquippabilityRecursive(nested));
             }
 
             return ingredients;
         }
 
-        private static HashSet<ModItem> SetupUsability(
-            IEnumerable<ModRecipe> recipes,
-            Func<ModItem, List<ModRecipe>> getRecipeForItem
-        )
+        private static HashSet<ModItem> SetupUsability(IEnumerable<ModRecipe> recipes)
         {
             var ingredientsUsable = new HashSet<ModItem>();
             foreach (var recipe in recipes.Where(RecipeService.HasRequirementsForRecipe))
@@ -271,20 +252,20 @@ namespace WachuMakeyMaking.Tabs
                 }
             }
 
-            var nestedIngredientsToCheck = ingredientsUsable.SelectMany(getRecipeForItem).OfType<ModRecipe>().ToList();
+            var nestedIngredientsToCheck = ingredientsUsable
+                .SelectMany(RecipeService.GetRecipesByOutput)
+                .OfType<ModRecipe>()
+                .ToList();
 
             if (nestedIngredientsToCheck.Count > 0)
             {
-                ingredientsUsable.UnionWith(SetupUsability(nestedIngredientsToCheck, getRecipeForItem));
+                ingredientsUsable.UnionWith(SetupUsability(nestedIngredientsToCheck));
             }
 
             return ingredientsUsable;
         }
 
-        private static Dictionary<ModItem, HashSet<uint>> SetupIngredientDivisions(
-            IEnumerable<ModRecipe> recipes,
-            Func<ModItem, List<ModRecipe>> getRecipeForItem
-        )
+        private static Dictionary<ModItem, HashSet<uint>> SetupIngredientDivisions(IEnumerable<ModRecipe> recipes)
         {
             var ingredientDivisions = new Dictionary<ModItem, HashSet<uint>>();
             foreach (var recipe in recipes)
@@ -302,7 +283,7 @@ namespace WachuMakeyMaking.Tabs
             }
 
             var nestedIngredientsToCheck = ingredientDivisions
-                .Keys.SelectMany(getRecipeForItem)
+                .Keys.SelectMany(RecipeService.GetRecipesByOutput)
                 .OfType<ModRecipe>()
                 .ToList();
 
@@ -321,7 +302,7 @@ namespace WachuMakeyMaking.Tabs
 
             if (nestedIngredientsToCheck.Count > 0)
             {
-                ingredientDivisions.MergeUnion(SetupIngredientDivisions(nestedIngredientsToCheck, getRecipeForItem));
+                ingredientDivisions.MergeUnion(SetupIngredientDivisions(nestedIngredientsToCheck));
             }
 
             return ingredientDivisions;
@@ -454,12 +435,12 @@ namespace WachuMakeyMaking.Tabs
                         return false;
                     }
 
-                    if (this.onlyCrafted && this.recipeService.GetRecipesByOutput(item).Count == 0)
+                    if (this.onlyCrafted && RecipeService.GetRecipesByOutput(item).Count == 0)
                     {
                         return false;
                     }
 
-                    if (this.onlyRaw && this.recipeService.GetRecipesByOutput(item).Count > 0)
+                    if (this.onlyRaw && RecipeService.GetRecipesByOutput(item).Count > 0)
                     {
                         return false;
                     }
@@ -523,7 +504,7 @@ namespace WachuMakeyMaking.Tabs
                 .. candidates.Where(item =>
                 {
                     // Manual exclusionary filters
-                    var recipes = this.recipeService.GetRecipesByOutput(item);
+                    var recipes = RecipeService.GetRecipesByOutput(item);
 
                     // Only including things with recipes, so if there's no recipe, we can skip the rest of the checks.
                     if (recipes.Count == 0)
@@ -581,7 +562,7 @@ namespace WachuMakeyMaking.Tabs
             candidates = candidates
                 .Where(x =>
                 {
-                    var recipes = this.recipeService.GetRecipesByOutput(x);
+                    var recipes = RecipeService.GetRecipesByOutput(x);
                     if (recipes.Count == 0)
                         return false;
                     // Filter out any candidates that have their entire ingredient list already added to the resource list

@@ -19,12 +19,11 @@ namespace WachuMakeyMaking.Services
         private readonly IMemoryCache cache = new MemoryCache(new MemoryCacheOptions());
         private readonly UniversalisService universalisService;
         private readonly CollectableService collectableService;
-        private readonly ExcelSheet<Item> itemSheet;
+        private static readonly ExcelSheet<Item> ItemSheet = Plugin.DataManager.GetExcelSheet<Item>();
         private readonly ModItem gil;
 
         // Outputs
         public Dictionary<uint, ModItemWithValue> PricesByItemId { get; private set; } = [];
-        public Dictionary<uint, ModItemWithValue> CraftCostByItemId { get; private set; } = [];
         public List<ModItemStack> SelectedIngredients { get; private set; } = [];
 
         // Progress tracking for the UI
@@ -37,9 +36,8 @@ namespace WachuMakeyMaking.Services
             this.universalisService = universalisService;
             this.collectableService = collectableService;
 
-            this.itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
-            this.gil = this.itemSheet.GetRow(1).ToMod();
-            this.GetRecipes();
+            this.gil = ItemSheet.GetRow(1).ToMod();
+            GetRecipes();
         }
 
         // This class is responsible for getting the ingredients available passed into it
@@ -53,7 +51,12 @@ namespace WachuMakeyMaking.Services
             this.EmitUpdateStartEvent();
             try
             {
-                var recipes = GetAllPossibleCrafts([.. selectedIngredients.Select(x => x.Item)]);
+                // Filter out those that have the correct type but insufficient quantities - even if we craft the missing intermediaries
+                var recipes = GetAllPossibleCrafts([.. selectedIngredients.Select(x => x.Item)])
+                    .Where(recipe =>
+                        recipe.CanMakeWith(selectedIngredients.ToDictionary(x => x.Item, x => x.Quantity))
+                    );
+
                 // Get all the prices for the recipes we can make, and the ingredients we have, and cache them in memory
                 var itemsToPrice = recipes
                     .Select(x => x.Item)
@@ -62,7 +65,7 @@ namespace WachuMakeyMaking.Services
 
                 var prices = await GetPricesAsync(itemsToPrice);
 
-                var pricesByItemId = prices.ToDictionary(x => x.RowId, x => x);
+                var pricesByItemId = prices.ToDictionary(x => x.Item.RowId, x => x);
 
                 // Figure out the cost and therefore net profit for each recipe, and store it in the recipe object for later use.
                 // We build up from layer 1 recipes and use them as the inputs for the next layer of recipes, so we can calculate the cost of making a recipe that uses other recipes as ingredients.
@@ -117,10 +120,6 @@ namespace WachuMakeyMaking.Services
 
                 this.SelectedIngredients = selectedIngredients;
                 this.PricesByItemId = pricesByItemId;
-                this.CraftCostByItemId = pricesByItemId.ToDictionary(
-                    x => x.Key,
-                    x => new ModItemWithValue(x.Value.Item, craftedPrices.GetValueOrDefault(x.Key, 0), this.gil)
-                );
 
                 // Make dummy entries for the ingredients themselves so we can compare them to the recipes we can make.
                 // They are just recipes with themselves as the ingredient and no other ingredients, and the value is just the price of the item itself.
@@ -150,7 +149,7 @@ namespace WachuMakeyMaking.Services
 
             foreach (var cachedItem in cachedItemsWithValues)
             {
-                itemIdsToFetch.Remove(cachedItem.RowId);
+                itemIdsToFetch.Remove(cachedItem.Item.RowId);
             }
 
             var collectablesWithValues = new List<ModItemWithValue>();
@@ -172,7 +171,7 @@ namespace WachuMakeyMaking.Services
             // Take out the ones we found now that we're outside the loop
             foreach (var collectableItem in collectablesWithValues)
             {
-                itemIdsToFetch.Remove(collectableItem.RowId);
+                itemIdsToFetch.Remove(collectableItem.Item.RowId);
             }
 
             // Create cancellation token with 2-minute timeout
@@ -224,7 +223,7 @@ namespace WachuMakeyMaking.Services
                 {
                     var item = itemLookup[itemId];
                     // Get the item's store price as a fallback, assuming we make it HQ for a 10% bonus
-                    var storePrice = this.itemSheet.GetRow(itemId).PriceLow * 1.1;
+                    var storePrice = ItemSheet.GetRow(itemId).PriceLow * 1.1;
                     var modItem = new ModItemWithValue(item, storePrice, this.gil);
                     cache.Set(itemId, modItem, DateTimeOffset.MaxValue);
                     return modItem;
@@ -273,11 +272,11 @@ namespace WachuMakeyMaking.Services
             return [.. recipesSet];
         }
 
-        private List<ModRecipe>? modRecipes;
+        private static List<ModRecipe>? ModRecipes;
 
-        public List<ModRecipe> GetRecipes()
+        public static List<ModRecipe> GetRecipes()
         {
-            modRecipes ??=
+            ModRecipes ??=
             [
                 .. Plugin
                     .DataManager.GetExcelSheet<Recipe>()
@@ -285,31 +284,36 @@ namespace WachuMakeyMaking.Services
                     .Select(GetRecipeIngredients),
             ];
 
-            return this.modRecipes;
+            return ModRecipes;
         }
 
-        private readonly Dictionary<ModItem, List<ModRecipe>> modRecipesByOutputItem = [];
-
-        public List<ModRecipe> GetRecipesByOutput(ModItem item)
+        public List<ModRecipe> GetRecipesByOutputTestable(ModItem item)
         {
-            if (!modRecipesByOutputItem.TryGetValue(item, out var cachedRecipes))
+            return GetRecipesByOutput(item);
+        }
+
+        private static readonly Dictionary<ModItem, List<ModRecipe>> ModRecipesByOutputItem = [];
+
+        public static List<ModRecipe> GetRecipesByOutput(ModItem item)
+        {
+            if (!ModRecipesByOutputItem.TryGetValue(item, out var cachedRecipes))
             {
                 var recipes = GetRecipes().Where(x => x.Item == item).ToList();
-                modRecipesByOutputItem[item] = recipes;
+                ModRecipesByOutputItem[item] = recipes;
                 return recipes;
             }
 
             return cachedRecipes;
         }
 
-        private readonly Dictionary<ModItem, List<ModRecipe>> ingredientCache = [];
+        private static readonly Dictionary<ModItem, List<ModRecipe>> IngredientCache = [];
 
-        public List<ModRecipe> FindRecipesWithIngredient(ModItem item)
+        public static List<ModRecipe> FindRecipesWithIngredient(ModItem item)
         {
-            if (!ingredientCache.TryGetValue(item, out var cachedRecipes))
+            if (!IngredientCache.TryGetValue(item, out var cachedRecipes))
             {
                 var recipes = GetRecipes().Where(x => x.Ingredients.ContainsKey(item)).ToList();
-                ingredientCache[item] = recipes;
+                IngredientCache[item] = recipes;
                 return recipes;
             }
 
@@ -350,7 +354,7 @@ namespace WachuMakeyMaking.Services
         //    return recipes?.FirstOrDefault();
         //}
 
-        private ModRecipe GetRecipeIngredients(Recipe recipe)
+        private static ModRecipe GetRecipeIngredients(Recipe recipe)
         {
             var ingredientsDict = new Dictionary<ModItem, byte>();
 
@@ -369,7 +373,7 @@ namespace WachuMakeyMaking.Services
                     if (ingredientRef.RowId != 0 && amount > 0)
                     {
                         // Get the actual Item object from the Excel sheet
-                        if (this.itemSheet.TryGetRow(ingredientRef.RowId, out var item))
+                        if (ItemSheet.TryGetRow(ingredientRef.RowId, out var item))
                         {
                             ingredientsDict[item.ToMod()] = amount;
                         }
@@ -404,16 +408,6 @@ namespace WachuMakeyMaking.Services
             );
         }
 
-        private static string GetItemName(uint itemId)
-        {
-            var itemSheet = Plugin.DataManager.GetExcelSheet<Item>();
-            if (itemSheet.TryGetRow(itemId, out var itemRow))
-            {
-                return itemRow.Name.ToString();
-            }
-            return $"Unknown Item ({itemId})";
-        }
-
         public static bool HasRequirementsForRecipe(ModRecipe recipe)
         {
             var classJobSheet = Plugin.DataManager.GetExcelSheet<ClassJob>();
@@ -422,15 +416,6 @@ namespace WachuMakeyMaking.Services
             var playerLevel = Plugin.PlayerState.GetClassJobLevel(classJob);
             if (playerLevel < recipe.classJobLevel)
             {
-                Plugin.Log.Debug(
-                    GetItemName(recipe.Item.RowId)
-                        + " requires level "
-                        + recipe.classJobLevel
-                        + " "
-                        + classJob.Name.ToString()
-                        + ". Player level: "
-                        + playerLevel
-                );
                 return false; // Player level too low
             }
 

@@ -85,7 +85,7 @@ namespace WachuMakeyMaking.Services
                 var resources = this.recipeService.SelectedIngredients ?? [];
                 foreach (var output in outputs)
                 {
-                    var serviceRecipes = this.recipeService.GetRecipesByOutput(output.Item) ?? [];
+                    var serviceRecipes = this.recipeService.GetRecipesByOutputTestable(output.Item) ?? [];
                     var value = output.Value;
                     var currency = output.Currency;
 
@@ -253,7 +253,7 @@ namespace WachuMakeyMaking.Services
             };
 
             // Option 2: Expand via sub-recipes
-            var serviceRecipes = this.recipeService.GetRecipesByOutput(item) ?? [];
+            var serviceRecipes = this.recipeService.GetRecipesByOutputTestable(item) ?? [];
             foreach (var subRecipe in serviceRecipes)
             {
                 // Calculate crafting cycles required based on the sub-recipe's yield (Number).
@@ -483,11 +483,6 @@ namespace WachuMakeyMaking.Services
                 if (FeatureFlags.VerifyBranchRows)
                 {
                     VerifyBranchRows(positiveBranches, positiveResult, "positive");
-                }
-
-                if (positiveResult.OptimalValue < this.lowerBound)
-                {
-                    this.logError("Branch result was below the lower bound, something very wrong must have happened.");
                 }
 
                 // If the LP failed or is not optimal, treat this branch stack as infeasible to avoid retrying

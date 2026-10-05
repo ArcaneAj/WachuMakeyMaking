@@ -6,6 +6,6 @@ namespace WachuMakeyMaking.Services
     public interface IRecipeService
     {
         List<ModItemStack> SelectedIngredients { get; }
-        List<ModRecipe> GetRecipesByOutput(ModItem item);
+        List<ModRecipe> GetRecipesByOutputTestable(ModItem item);
     }
 }
