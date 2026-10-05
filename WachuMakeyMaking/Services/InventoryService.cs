@@ -134,11 +134,6 @@ namespace WachuMakeyMaking.Services
 
             var itemsBySource = GetItemsBySource();
 
-            foreach (var (filter, value) in itemSourceFilters)
-            {
-                Plugin.Log.Info($"{filter} {value}");
-            }
-
             // Consolidate items with the same ID
             var consolidatedItems = itemsBySource
                 .Where(x => itemSourceFilters.ContainsKey(x.Key) && itemSourceFilters[x.Key])
@@ -150,8 +145,6 @@ namespace WachuMakeyMaking.Services
                     return new ModItemStack(firstStack.Item, firstStack.Id, group.Sum(stack => stack.Quantity));
                 })
                 .ToArray();
-
-            consolidatedItems.Any(x => x.Item.RowId == 5383).Log();
 
             return consolidatedItems;
         }
