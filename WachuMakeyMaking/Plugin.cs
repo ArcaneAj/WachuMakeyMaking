@@ -57,10 +57,10 @@ public sealed class Plugin : IDalamudPlugin
 
     public Plugin()
     {
-        UniversalisService = new UniversalisService();
         CollectableService = new CollectableService();
         InventoryService = new InventoryService();
-        RecipeService = new RecipeService(UniversalisService, CollectableService);
+        UniversalisService = new UniversalisService(CollectableService);
+        RecipeService = new RecipeService(UniversalisService);
         SolverService = new SolverService(l => Log.Info(l), l => Log.Error(l), RecipeService);
         TabService = new TabService(RecipeService, InventoryService, SolverService);
         MainWindow = new MainWindow(TabService);
@@ -115,10 +115,6 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnInventoryChanged(IReadOnlyCollection<InventoryEventArgs> events)
     {
-        foreach (var e in events)
-        {
-            Log.Info($"{e.Type} slot:{e.Item.InventorySlot} itemId: {e.Item.BaseItemId} {e.Item.ContainerType}");
-        }
         if (
             events.Any(e =>
                 e.Type == GameInventoryEvent.Added

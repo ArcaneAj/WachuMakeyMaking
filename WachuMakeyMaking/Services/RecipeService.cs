@@ -18,7 +18,6 @@ namespace WachuMakeyMaking.Services
         private readonly TimeSpan cacheExpiration = TimeSpan.FromMinutes(30);
         private readonly IMemoryCache cache = new MemoryCache(new MemoryCacheOptions());
         private readonly UniversalisService universalisService;
-        private readonly CollectableService collectableService;
         private static readonly ExcelSheet<Item> ItemSheet = Plugin.DataManager.GetExcelSheet<Item>();
         private readonly ModItem gil;
 
@@ -31,10 +30,9 @@ namespace WachuMakeyMaking.Services
         public string CurrentProcessingStep { get; private set; } = string.Empty;
         public string UniversalisMessage => this.universalisService.ErrorMessage;
 
-        public RecipeService(UniversalisService universalisService, CollectableService collectableService)
+        public RecipeService(UniversalisService universalisService)
         {
             this.universalisService = universalisService;
-            this.collectableService = collectableService;
 
             this.gil = ItemSheet.GetRow(1).ToMod();
             GetRecipes();
@@ -63,9 +61,9 @@ namespace WachuMakeyMaking.Services
                     .Concat(FeatureFlags.AllowSellingIngredients ? selectedIngredients.Select(x => x.Item) : [])
                     .ToHashSet();
 
-                var prices = await GetPricesAsync(itemsToPrice);
+                var prices = await universalisService.GetOrFetchAsync(itemsToPrice);
 
-                var pricesByItemId = prices.ToDictionary(x => x.Item.RowId, x => x);
+                var pricesByItemId = prices.ToDictionary(x => x.Key.RowId, x => x.Value);
 
                 // Figure out the cost and therefore net profit for each recipe, and store it in the recipe object for later use.
                 // We build up from layer 1 recipes and use them as the inputs for the next layer of recipes, so we can calculate the cost of making a recipe that uses other recipes as ingredients.
@@ -131,116 +129,6 @@ namespace WachuMakeyMaking.Services
                 this.InFlight--;
             }
         }
-
-        private async Task<List<ModItemWithValue>> GetPricesAsync(HashSet<ModItem> itemsToPrice)
-        {
-            var itemIdsToFetch = itemsToPrice.Select(x => x.RowId).ToList();
-            // Create a lookup dictionary for quick access to items by item ID
-            var itemLookup = itemsToPrice.ToDictionary(r => r.RowId, r => r);
-
-            var cachedItemsWithValues = new List<ModItemWithValue>();
-            foreach (var itemId in itemsToPrice)
-            {
-                if (cache.TryGetValue(itemId, out double cachedValue))
-                {
-                    cachedItemsWithValues.Add(new ModItemWithValue(itemId, cachedValue, this.gil));
-                }
-            }
-
-            foreach (var cachedItem in cachedItemsWithValues)
-            {
-                itemIdsToFetch.Remove(cachedItem.Item.RowId);
-            }
-
-            var collectablesWithValues = new List<ModItemWithValue>();
-            foreach (var itemId in itemIdsToFetch)
-            {
-                if (itemLookup.TryGetValue(itemId, out var item))
-                {
-                    // Check if this item is collectable
-                    var (isCollectable, scripType, scripValue) = this.collectableService.GetCollectableInfo(item);
-                    if (isCollectable)
-                    {
-                        var modItem = new ModItemWithValue(item, scripValue, scripType);
-                        cache.Set(itemId, modItem, DateTimeOffset.MaxValue);
-                        collectablesWithValues.Add(modItem);
-                    }
-                }
-            }
-
-            // Take out the ones we found now that we're outside the loop
-            foreach (var collectableItem in collectablesWithValues)
-            {
-                itemIdsToFetch.Remove(collectableItem.Item.RowId);
-            }
-
-            // Create cancellation token with 2-minute timeout
-            using var timedCancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-            var timedCancellationToken = timedCancellationTokenSource.Token;
-
-            CurrentProcessingStep = $"Fetching market prices... 0 complete, 0 failed, {itemIdsToFetch.Count} remaining";
-
-            var uncachedItemsWithValues = new List<ModItemWithValue>();
-            try
-            {
-                var marketData = await this.universalisService.GetMarketDataAsync(
-                    itemIdsToFetch,
-                    (s) => CurrentProcessingStep = s,
-                    timedCancellationToken
-                );
-
-                foreach (var marketItem in marketData.results ?? [])
-                {
-                    var id = marketItem.itemId;
-
-                    // Get the market value using the service
-                    var marketValue = UniversalisService.GetMarketValue(marketItem);
-                    var modItem = new ModItemWithValue(itemLookup[id], marketValue, this.gil);
-                    cache.Set(id, modItem, cacheExpiration);
-                    uncachedItemsWithValues.Add(modItem);
-                }
-
-                // All the items that weren't collectable and failed to be found via universalis
-                itemIdsToFetch = marketData.failedItems ?? itemIdsToFetch;
-            }
-            catch (OperationCanceledException)
-            {
-                if (timedCancellationToken.IsCancellationRequested)
-                {
-                    Plugin.Log.Warning("Universalis API request timed out after 10 seconds");
-                }
-
-                return [];
-            }
-            catch (Exception ex)
-            {
-                Plugin.Log.Error($"Error calling Universalis API: {ex.Message}");
-            }
-
-            var storeItemsWithValues = itemIdsToFetch
-                .Where(itemId => itemLookup.TryGetValue(itemId, out var _))
-                .Select(itemId =>
-                {
-                    var item = itemLookup[itemId];
-                    // Get the item's store price as a fallback, assuming we make it HQ for a 10% bonus
-                    var storePrice = ItemSheet.GetRow(itemId).PriceLow * 1.1;
-                    var modItem = new ModItemWithValue(item, storePrice, this.gil);
-                    cache.Set(itemId, modItem, DateTimeOffset.MaxValue);
-                    return modItem;
-                })
-                .ToList();
-
-            return
-            [
-                .. collectablesWithValues,
-                .. cachedItemsWithValues,
-                .. uncachedItemsWithValues,
-                .. storeItemsWithValues,
-            ];
-        }
-
-        // We need to check the prices each time we update for everything in the total list above, but the universalis service should have a timed cache
-        // and only fetch the values not in the cache
 
         private List<ModRecipe> GetAllPossibleCrafts(List<ModItem> items)
         {

@@ -47,7 +47,6 @@ namespace WachuMakeyMaking.Tabs
             }
             else if (this.model.SolverState == SolverService.State.Optimising)
             {
-                ImGui.Text("Optimising...");
                 if (this.model.CurrentSolution != null)
                 {
                     ImGui.Text($"Current best value: {Math.Floor(-this.model.CurrentSolution.OptimalValue)} gil");
@@ -56,7 +55,7 @@ namespace WachuMakeyMaking.Tabs
             else if (this.model.SolverState == SolverService.State.Finished && this.model.CurrentSolution != null)
             {
                 ImGuiHelpers.ScaledDummy(10.0f);
-                ImGui.Text("Finished");
+                ImGui.Text($"Best solution: {(int)-this.model.CurrentSolution.OptimalValue}");
                 ImGui.Separator();
                 ImGuiHelpers.ScaledDummy(5.0f);
 

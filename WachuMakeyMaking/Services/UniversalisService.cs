@@ -6,121 +6,146 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Lumina.Excel;
+using Lumina.Excel.Sheets;
 using WachuMakeyMaking.Models;
+using WachuMakeyMaking.Utils;
 
 namespace WachuMakeyMaking.Services;
 
 public sealed class UniversalisService : IDisposable
 {
+    private readonly CollectableService collectableService;
     private readonly HttpClient httpClient;
-    private const int MaxRetries = 3;
+    private readonly BatchProcessor<ModItem, ModItemWithValue> itemDataProcessor;
+    private const int MaxAttempts = 6;
     public string ErrorMessage => this.errorMessage;
     private string errorMessage = string.Empty;
+    private static readonly ExcelSheet<Item> ItemSheet = Plugin.DataManager.GetExcelSheet<Item>();
+    private readonly ModItem gil;
 
-    public UniversalisService()
+    public UniversalisService(CollectableService collectableService)
     {
+        this.collectableService = collectableService;
+        this.gil = ItemSheet.GetRow(1).ToMod();
         this.httpClient = new HttpClient(new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All });
+        this.itemDataProcessor = new BatchProcessor<ModItem, ModItemWithValue>(
+            batchFetcher: GetItemPricesAsync,
+            batchSize: 100,
+            batchTimeout: TimeSpan.FromMilliseconds(100),
+            cacheTtl: TimeSpan.FromHours(1)
+        );
     }
 
     public void Dispose()
     {
         this.httpClient?.Dispose();
+        this.itemDataProcessor.Dispose();
     }
 
-    public async Task<AggregatedMarketBoardResult> GetMarketDataAsync(
-        List<uint> itemIds,
-        Action<string> onIterationUpdate,
-        CancellationToken cancellationToken = default
-    )
+    public async Task<IReadOnlyDictionary<ModItem, ModItemWithValue>> GetOrFetchAsync(IEnumerable<ModItem> itemsToPrice)
     {
-        this.errorMessage = string.Empty;
-        // Get player's home world ID
-        var homeWorldId = Plugin.PlayerState.HomeWorld.RowId;
-
-        // Normalize and deduplicate list
-        var idsArray = itemIds.Where(id => id != 0).Distinct().ToList();
-        if (idsArray == null || idsArray.Count == 0)
-            return new AggregatedMarketBoardResult { results = [], failedItems = [] };
-
-        var results = new List<MarketBoardResult>();
-        var newResults = new List<MarketBoardResult>();
-        var failed = new List<uint>();
-
-        for (var i = 0; i < MaxRetries; i++)
-        {
-            try
-            {
-                (newResults, idsArray) = await GetDataForWorldAsync(
-                    homeWorldId,
-                    idsArray,
-                    onIterationUpdate,
-                    cancellationToken
-                );
-                results.AddRange(newResults);
-                break;
-            }
-            catch (OperationCanceledException)
-            {
-                Plugin.Log.Info("Universalis API request cancelled");
-                throw; // Should bypass retries
-            }
-            catch (Exception ex)
-            {
-                Plugin.Log.Error($"Error calling Universalis API for ids [{idsArray}]: {ex.Message}");
-                // Wait a second and try again
-                await Task.Delay(i * 1000, cancellationToken);
-            }
-        }
-
-        if (idsArray.Count != 0)
-        {
-            this.errorMessage =
-                "Error fetching market data from Universalis, falling back to store prices for missing items.";
-            Plugin.ChatGui.PrintError(this.errorMessage);
-        }
-
-        return new AggregatedMarketBoardResult { results = results, failedItems = idsArray };
+        return await itemDataProcessor.GetOrFetchAsync(itemsToPrice);
     }
 
-    private async Task<(List<MarketBoardResult> results, List<uint> failed)> GetDataForWorldAsync(
-        uint homeWorldId,
-        List<uint> idsArray,
-        Action<string> onIterationUpdate,
+    private async Task<Dictionary<ModItem, ModItemWithValue>> GetItemPricesAsync(
+        List<ModItem> items,
         CancellationToken cancellationToken
     )
     {
-        if (idsArray.Count == 0)
-            return ([], []);
-        var aggregatedResults = new List<MarketBoardResult>();
-        var failed = new List<uint>();
+        // Get player's home world ID
+        var homeWorldId = Plugin.PlayerState.HomeWorld.RowId;
+        var itemsById = items.ToDictionary(x => x.RowId, x => x);
 
-        // Universalis aggregated endpoint accepts up to ~100 ids per request; split into chunks of 100
-        foreach (var chunk in idsArray.Chunk(100))
+        var marketBoardResults = new List<MarketBoardResult>();
+        var toFetch = itemsById.Keys.ToList();
+
+        var collectablesWithValues = new List<ModItemWithValue>();
+        foreach (var itemId in toFetch)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var json = await FetchChunk(chunk, homeWorldId, cancellationToken);
-
-            if (json?.results != null)
+            if (itemsById.TryGetValue(itemId, out var item))
             {
-                aggregatedResults.AddRange(json.results);
+                // Check if this item is collectable
+                var (isCollectable, scripType, scripValue) = this.collectableService.GetCollectableInfo(item);
+                if (isCollectable)
+                {
+                    collectablesWithValues.Add(new ModItemWithValue(item, scripValue, scripType));
+                }
             }
-
-            if (json?.failedItems != null)
-            {
-                failed.AddRange(json.failedItems);
-            }
-
-            onIterationUpdate(
-                $"Fetching market prices... {aggregatedResults.Count} complete, {failed.Count} failed, {idsArray.Count - aggregatedResults.Count - failed.Count} remaining"
-            );
         }
 
-        return (aggregatedResults, failed);
+        // Take out the ones we found now that we're outside the loop
+        foreach (var collectableItem in collectablesWithValues)
+        {
+            toFetch.Remove(collectableItem.Item.RowId);
+        }
+
+        for (var i = 0; i < MaxAttempts; i++)
+        {
+            if (toFetch.Count == 0)
+                break;
+            try
+            {
+                var json = await FetchChunk(toFetch, homeWorldId, cancellationToken);
+
+                if (json?.results != null)
+                {
+                    marketBoardResults = json.results;
+                }
+
+                if (json?.failedItems != null)
+                {
+                    toFetch = json.failedItems;
+                }
+            }
+            catch (Exception e)
+            {
+                var errorReason = ErrorReason.Other;
+                if (e.Message.Contains("TooManyRequests"))
+                {
+                    errorReason = e.Message.Contains("max connections reached")
+                        ? ErrorReason.MaxConnections
+                        : ErrorReason.RateLimit;
+                }
+
+                this.errorMessage =
+                    $"Error fetching market data from Universalis ({errorReason}), falling back to store prices for missing items.";
+                // Exponential backoff to give universalis more time to breathe
+                // https://docs.universalis.app/
+                // "There is a rate limit of 25 req/s (50 req/s burst) on the API, and 15 req/s (30 req/s burst) on the website itself, if you're scraping instead."
+                // "The number of simultaneous connections per IP is capped to 8."
+                // More likely to be simultaneous connections via other plugins, as we should at worst have 2 or 3 concurrent calls
+                if (i < MaxAttempts - 1) // No point waiting the last one if we're not going to try again
+                    await Task.Delay(1000 * (int)Math.Pow(2, i), cancellationToken);
+            }
+        }
+
+        var universalisResults = marketBoardResults.Select(x => new ModItemWithValue(
+            itemsById[x.itemId],
+            GetMarketValue(x),
+            this.gil
+        ));
+
+        var storeItemsWithValues = toFetch
+            .Where(itemId => itemsById.TryGetValue(itemId, out var _))
+            .Select(itemId =>
+            {
+                var item = itemsById[itemId];
+                // Get the item's store price as a fallback, assuming we make it HQ for a 10% bonus
+                var storePrice = ItemSheet.GetRow(itemId).PriceLow * 1.1;
+                var modItem = new ModItemWithValue(item, storePrice, this.gil);
+                return modItem;
+            })
+            .ToList();
+
+        return collectablesWithValues
+            .Concat(universalisResults)
+            .Concat(storeItemsWithValues)
+            .ToDictionary(x => x.Item, x => x);
     }
 
     private async Task<AggregatedMarketBoardResult?> FetchChunk(
-        uint[] chunk,
+        List<uint> chunk,
         uint homeWorldId,
         CancellationToken cancellationToken = default
     )
@@ -166,5 +191,12 @@ public sealed class UniversalisService : IDisposable
         }
 
         return marketValue;
+    }
+
+    private enum ErrorReason
+    {
+        Other,
+        MaxConnections,
+        RateLimit,
     }
 }

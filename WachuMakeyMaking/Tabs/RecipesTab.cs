@@ -236,9 +236,7 @@ namespace WachuMakeyMaking.Tabs
                             );
                             if (ImGui.IsItemClicked())
                             {
-                                var recipe = RecipeService
-                                    .GetRecipesByOutput(output.Item)
-                                    .FirstOrDefault(r => r.RowId == output.Item.RowId);
+                                var recipe = RecipeService.GetRecipesByOutput(output.Item).FirstOrDefault();
                                 if (recipe != null)
                                 {
                                     try

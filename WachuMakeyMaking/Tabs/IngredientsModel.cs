@@ -97,7 +97,7 @@ namespace WachuMakeyMaking.Tabs
                 .DisplayItems.Where(x => this.IngredientSelections.GetValueOrDefault(x.Id, false))
                 .ToList();
 
-            this.recipeService.UpdateAsync(selectedDisplayItems);
+            await this.recipeService.UpdateAsync(selectedDisplayItems);
         }
 
         public void ResetOverrides()

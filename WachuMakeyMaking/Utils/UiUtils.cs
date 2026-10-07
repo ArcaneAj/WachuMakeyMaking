@@ -98,7 +98,9 @@ namespace WachuMakeyMaking.Utils
             var indexInPage = -1;
             foreach (var (r, index) in recipeNotebookList.Recipe.Select((x, i) => (x, i)))
             {
-                if (r.RowId == recipe.RowId || r.RowId == 4294967295)
+                if (r.RowId == 4294967295)
+                    break;
+                if (r.RowId == recipe.RowId)
                 {
                     indexInPage = index;
                     break;
@@ -114,6 +116,11 @@ namespace WachuMakeyMaking.Utils
 
             unsafe
             {
+                // We're still not matching for master recipes, not sure why exactly
+                //Plugin.Log.Info($"{indexInPage} {AgentRecipeNote.Instance()->SelectedRecipeIndex}");
+                //Plugin.Log.Info($"{noteBookDivisionId} {AgentRecipeNote.Instance()->SelectedRecipeCategory}");
+                //Plugin.Log.Info($"{categoryPage} {AgentRecipeNote.Instance()->SelectedRecipeCategoryPage}");
+                //Plugin.Log.Info($"{recipe.CraftType.RowId} {AgentRecipeNote.Instance()->SelectedCraftType}");
                 if (AgentRecipeNote.Instance()->SelectedRecipeIndex == indexInPage)
                     if (AgentRecipeNote.Instance()->SelectedRecipeCategory == noteBookDivisionId)
                         if (AgentRecipeNote.Instance()->SelectedRecipeCategoryPage == categoryPage)
