@@ -103,6 +103,7 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
         ClientState.Login -= OnLogin;
+        ClientState.Logout -= OnLogout;
 
         WindowSystem.RemoveAllWindows();
 

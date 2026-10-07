@@ -186,18 +186,25 @@ namespace WachuMakeyMaking.Services
             return itemBySource;
         }
 
-        private static ModItemStack[] GetItemsFromInventory(GameInventoryType inventory)
+        private static List<ModItemStack> GetItemsFromInventory(GameInventoryType inventory)
         {
-            return Plugin
-                .GameInventory.GetInventoryItems(inventory)
-                .ToArray()
-                .Where(x => x.ItemId != 0)
-                .SelectMany(i =>
-                    ItemSheet.TryGetRow(i.BaseItemId, out var row)
-                        ? [new ModItemStack(row.ToMod(), i.BaseItemId, i.Quantity)]
-                        : Array.Empty<ModItemStack>()
-                )
-                .ToArray();
+            var items = Plugin.GameInventory.GetInventoryItems(inventory);
+
+            var result = new List<ModItemStack>(items.Length);
+            for (var i = 0; i < items.Length; i++)
+            {
+                ref readonly var item = ref items[i];
+
+                if (item.ItemId == 0)
+                    continue;
+
+                if (ItemSheet.TryGetRow(item.BaseItemId, out var row))
+                {
+                    result.Add(new ModItemStack(row.ToMod(), item.BaseItemId, item.Quantity));
+                }
+            }
+
+            return result;
         }
 
         public void AddManualIngredient(ModItemStack modItemStack)

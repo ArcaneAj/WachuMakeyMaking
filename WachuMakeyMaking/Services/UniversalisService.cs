@@ -99,7 +99,7 @@ public sealed class UniversalisService : IDisposable
 
                 if (json?.results != null)
                 {
-                    marketBoardResults = json.results;
+                    marketBoardResults.AddRange(json.results);
                 }
 
                 if (json?.failedItems != null)
@@ -133,15 +133,15 @@ public sealed class UniversalisService : IDisposable
             itemsById[x.itemId],
             GetMarketValue(x),
             this.gil
-        ));
+        )).ToList();
 
-        var storeItemsWithValues = toFetch
-            .Where(itemId => itemsById.TryGetValue(itemId, out var _))
-            .Select(itemId =>
+        var missingValues = items.Where(x => !universalisResults.Any(y => y.Item == x) && !collectablesWithValues.Any(y => y.Item == x));
+
+        var storeItemsWithValues = missingValues
+            .Select(item =>
             {
-                var item = itemsById[itemId];
                 // Get the item's store price as a fallback, assuming we make it HQ for a 10% bonus
-                var storePrice = ItemSheet.GetRow(itemId).PriceLow * 1.1;
+                var storePrice = ItemSheet.GetRow(item.RowId).PriceLow * 1.1;
                 var modItem = new ModItemWithValue(item, storePrice, this.gil);
                 return modItem;
             })
