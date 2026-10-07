@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,6 +31,13 @@ public sealed class UniversalisService : IDisposable
         this.collectableService = collectableService;
         this.gil = ItemSheet.GetRow(1).ToMod();
         this.httpClient = new HttpClient(new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All });
+        var version =
+            Assembly
+                .GetExecutingAssembly()
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion
+            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString();
+        this.httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue(Plugin.Name, version));
         this.itemDataProcessor = new BatchProcessor<ModItem, ModItemWithValue>(
             batchFetcher: GetItemPricesAsync,
             batchSize: 100,
