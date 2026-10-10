@@ -134,7 +134,7 @@ namespace WachuMakeyMaking.Tabs
                             var isChecked = division.Value;
                             if (ImGui.Checkbox($"##_RUF_{categoryName}_{divisionName}", ref isChecked))
                             {
-                                this.model.SetDivision(categoryName, division.Key, headerChecked);
+                                this.model.SetDivision(categoryName, division.Key, isChecked);
                             }
                             ImGui.SameLine();
                             ImGui.Text(divisionName);
